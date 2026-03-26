@@ -180,7 +180,7 @@ function buildMatrix() {
       bodyHTML += `<td class="${cls}${selClass}" data-key="${key}">
         <div class="cell-inputs">
           <input type="number" class="matrix-input" data-key="${key}" min="0" max="20" value="${score}" placeholder="—" title="Expected score (0–20)">
-          <input type="number" class="matrix-vol" data-key="${key}" min="0" max="5" value="${vol}" placeholder="V" title="Volatility (0–5)">
+          <input type="number" class="matrix-vol" data-key="${key}" min="0" max="5" value="${vol}" placeholder="± vol" title="Volatility (0–5)">
         </div>
         ${tpIndicator}
       </td>`;
@@ -203,8 +203,6 @@ function buildMatrix() {
       }
       updateCellColor(e.target.closest('td'), key);
     });
-    // Prevent click from bubbling to cell selector
-    input.addEventListener('click', (e) => e.stopPropagation());
   });
 
   // Volatility input handlers
@@ -220,10 +218,9 @@ function buildMatrix() {
         matchupVolatility[key] = val;
       }
     });
-    input.addEventListener('click', (e) => e.stopPropagation());
   });
 
-  // Cell click → select for table prefs
+  // Cell click → select for table prefs (works even when clicking inputs)
   tbody.querySelectorAll('td[data-key]').forEach(td => {
     td.addEventListener('click', () => {
       const key = td.dataset.key;
@@ -232,7 +229,6 @@ function buildMatrix() {
       } else {
         selectedMatrixCell = key;
       }
-      // Update selection highlight
       tbody.querySelectorAll('td[data-key]').forEach(c => c.classList.toggle('matrix-cell-selected', c.dataset.key === selectedMatrixCell));
       renderTablePrefsPanel();
     });
@@ -779,18 +775,14 @@ function bindPhaseActions() {
   document.getElementById('btn-fill-dummy').addEventListener('click', fillDummyTeams);
   document.getElementById('btn-fill-matrix').addEventListener('click', fillDummyMatrix);
   document.getElementById('btn-run-algo').addEventListener('click', runOptimalPairing);
-  document.getElementById('btn-to-tables').addEventListener('click', () => {
-    if (collectTeamData()) showPhase('tables');
-  });
-  document.getElementById('btn-back-setup').addEventListener('click', () => showPhase('setup'));
   document.getElementById('btn-randomize-tables').addEventListener('click', randomizeRound);
   document.getElementById('btn-to-pairing').addEventListener('click', () => {
-    if (collectTableData()) {
+    if (collectTeamData() && collectTableData()) {
       startPairing();
       showPhase('pairing');
     }
   });
-  document.getElementById('btn-back-tables').addEventListener('click', () => showPhase('tables'));
+  document.getElementById('btn-back-setup').addEventListener('click', () => showPhase('setup'));
   document.getElementById('btn-reset-pairing').addEventListener('click', () => {
     startPairing();
   });

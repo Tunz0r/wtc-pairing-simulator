@@ -16,13 +16,12 @@
     </header>
 
     <nav id="phase-nav">
-      <button class="phase-btn active" data-phase="setup">1. Team Setup</button>
-      <button class="phase-btn" data-phase="tables">2. Tables &amp; Maps</button>
-      <button class="phase-btn" data-phase="pairing">3. Pairing Process</button>
-      <button class="phase-btn" data-phase="results">4. Results</button>
+      <button class="phase-btn active" data-phase="setup">1. Round Setup</button>
+      <button class="phase-btn" data-phase="pairing">2. Pairing Process</button>
+      <button class="phase-btn" data-phase="results">3. Results</button>
     </nav>
 
-    <!-- PHASE 1: Team Setup -->
+    <!-- PHASE 1: Round Setup (Teams + Deployment/Mission + Matrix) -->
     <section id="phase-setup" class="phase active">
       <div class="setup-grid">
         <div class="team-setup" id="team-a-setup">
@@ -36,17 +35,49 @@
           <div class="players-list" id="team-b-players"></div>
         </div>
       </div>
+
+      <!-- Round Config (Deployment + Mission + Tables) -->
+      <div class="round-config-section">
+        <h2>Deployment &amp; Mission</h2>
+        <p class="phase-desc">Select the deployment zone and mission for this round. The 8 tables are automatically assigned maps from the chosen deployment.</p>
+        <div class="round-config">
+          <div class="round-config-row">
+            <div class="config-field">
+              <label>Deployment Zone</label>
+              <select id="round-deployment">
+                <option value="">— Select —</option>
+                <optgroup label="Standard">
+                  <!-- populated by JS -->
+                </optgroup>
+              </select>
+            </div>
+            <div class="config-field">
+              <label>Mission</label>
+              <select id="round-mission">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+            <div class="config-field config-field-btn">
+              <label>&nbsp;</label>
+              <button class="btn btn-accent" id="btn-randomize-tables">Randomize</button>
+            </div>
+          </div>
+        </div>
+        <h3 class="tables-preview-title">Tables Preview</h3>
+        <div class="tables-grid" id="tables-grid"></div>
+      </div>
+
       <!-- 8x8 Matchup Matrix -->
       <div class="matrix-section" id="matrix-section">
         <h2>Matchup Matrix</h2>
-        <p class="phase-desc">Enter expected scores (0–20) and volatility (0–5) for each matchup. Click a cell to set table preferences.</p>
+        <p class="phase-desc">Enter expected scores (0–20) and volatility ±(0–5). Click a cell to set table preferences.</p>
         <div class="matrix-legend">
           <span class="legend-item legend-brown">0–2</span>
           <span class="legend-item legend-red">3–7</span>
           <span class="legend-item legend-yellow">8–12</span>
           <span class="legend-item legend-green">13–17</span>
           <span class="legend-item legend-blue">18–20</span>
-          <span class="legend-item legend-vol">V = Volatility</span>
+          <span class="legend-item legend-vol">± = Volatility</span>
         </div>
         <div class="matrix-scroll">
           <table class="matchup-matrix" id="matchup-matrix">
@@ -68,41 +99,6 @@
 
       <div class="phase-actions">
         <button class="btn btn-accent" id="btn-fill-dummy">Fill Dummy Teams</button>
-        <button class="btn btn-primary" id="btn-to-tables">Continue to Tables &amp; Maps →</button>
-      </div>
-    </section>
-
-    <!-- PHASE 2: Round Setup (Deployment + Mission) -->
-    <section id="phase-tables" class="phase">
-      <h2>Round Setup</h2>
-      <p class="phase-desc">Select the deployment zone and mission for this round. The 8 tables are automatically assigned maps from the chosen deployment.</p>
-
-      <div class="round-config">
-        <div class="round-config-row">
-          <div class="config-field">
-            <label>Deployment Zone</label>
-            <select id="round-deployment">
-              <option value="">— Select —</option>
-              <optgroup label="Standard">
-                <!-- populated by JS -->
-              </optgroup>
-            </select>
-          </div>
-          <div class="config-field">
-            <label>Mission</label>
-            <select id="round-mission">
-              <option value="">— Select —</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <h3 class="tables-preview-title">Tables Preview</h3>
-      <div class="tables-grid" id="tables-grid"></div>
-
-      <div class="phase-actions">
-        <button class="btn btn-secondary" id="btn-back-setup">← Back</button>
-        <button class="btn btn-accent" id="btn-randomize-tables">Randomize</button>
         <button class="btn btn-primary" id="btn-to-pairing">Begin Pairing Process →</button>
       </div>
     </section>
@@ -157,7 +153,7 @@
       </details>
 
       <div class="phase-actions">
-        <button class="btn btn-secondary" id="btn-back-tables">← Back to Tables</button>
+        <button class="btn btn-secondary" id="btn-back-setup">← Back to Setup</button>
         <button class="btn btn-secondary" id="btn-reset-pairing">Reset Pairing</button>
       </div>
     </section>
