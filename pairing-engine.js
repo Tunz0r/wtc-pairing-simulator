@@ -120,7 +120,7 @@ class PairingEngine {
       case 'roll_table_choice':
         return {
           type: 'roll_off',
-          description: `Captains roll off to determine who gets the Table Choice token. The winner chooses tables first for their defender match.`,
+          description: `First pairings are set! Captains now roll off to determine who gets the Table Choice token. The winner's defender picks their table first.`,
         };
 
       case 'refuse_attackers':
@@ -252,11 +252,8 @@ class PairingEngine {
     this.log.push(`Round ${this.round}: Team A attacks with ${atkA.map(id => this.getPlayerName(id)).join(' & ')}`);
     this.log.push(`Round ${this.round}: Team B attacks with ${atkB.map(id => this.getPlayerName(id)).join(' & ')}`);
 
-    if (this.round === 1 && this.tableChoiceToken === null) {
-      this.step = 'roll_table_choice';
-    } else {
-      this.step = 'refuse_attackers';
-    }
+    // Always go to refuse next — roll-off happens after the first game is set
+    this.step = 'refuse_attackers';
 
     return { success: true };
   }
@@ -264,7 +261,7 @@ class PairingEngine {
   _processRollOff(winner) {
     if (winner !== 'A' && winner !== 'B') return { success: false, error: 'Winner must be A or B' };
     this.tableChoiceToken = winner;
-    this.step = 'refuse_attackers';
+    this.step = 'choose_tables_defenders';
     this.log.push(`Table Choice token goes to Team ${winner}`);
     return { success: true };
   }
@@ -307,7 +304,12 @@ class PairingEngine {
     this.poolA = this.poolA.filter(id => id !== this.defenderA && id !== this.acceptedA);
     this.poolB = this.poolB.filter(id => id !== this.defenderB && id !== this.acceptedB);
 
-    this.step = 'choose_tables_defenders';
+    // Roll-off happens after the first game is determined (Round 1 only)
+    if (this.tableChoiceToken === null) {
+      this.step = 'roll_table_choice';
+    } else {
+      this.step = 'choose_tables_defenders';
+    }
     return { success: true };
   }
 
