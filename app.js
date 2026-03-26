@@ -115,6 +115,31 @@ function fillDummyTeams() {
   buildMatrix();
 }
 
+function fillDummyMatrix() {
+  // Distribution: 5% brown(0-2), 25% red(3-7), 40% yellow(8-12), 25% green(13-17), 5% blue(18-20)
+  function randomScore() {
+    const r = Math.random() * 100;
+    if (r < 5) return Math.floor(Math.random() * 3);          // 0-2
+    if (r < 30) return 3 + Math.floor(Math.random() * 5);     // 3-7
+    if (r < 70) return 8 + Math.floor(Math.random() * 5);     // 8-12
+    if (r < 95) return 13 + Math.floor(Math.random() * 5);    // 13-17
+    return 18 + Math.floor(Math.random() * 3);                 // 18-20
+  }
+
+  matchupScores = {};
+  matchupVolatility = {};
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      const key = `a${i}_b${j}`;
+      matchupScores[key] = randomScore();
+      if (Math.random() < 0.1) {
+        matchupVolatility[key] = 1 + Math.floor(Math.random() * 5); // 1-5
+      }
+    }
+  }
+  buildMatrix();
+}
+
 // --- Matchup Matrix ---
 
 function getMatrixPlayers() {
@@ -752,6 +777,7 @@ function showPhase(phaseName) {
 
 function bindPhaseActions() {
   document.getElementById('btn-fill-dummy').addEventListener('click', fillDummyTeams);
+  document.getElementById('btn-fill-matrix').addEventListener('click', fillDummyMatrix);
   document.getElementById('btn-run-algo').addEventListener('click', runOptimalPairing);
   document.getElementById('btn-to-tables').addEventListener('click', () => {
     if (collectTeamData()) showPhase('tables');
