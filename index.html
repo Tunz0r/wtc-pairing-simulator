@@ -39,13 +39,14 @@
       <!-- 8x8 Matchup Matrix -->
       <div class="matrix-section" id="matrix-section">
         <h2>Matchup Matrix</h2>
-        <p class="phase-desc">Enter expected scores (0–20) for each matchup. Cells color automatically.</p>
+        <p class="phase-desc">Enter expected scores (0–20) and volatility (0–5) for each matchup. Click a cell to set table preferences.</p>
         <div class="matrix-legend">
           <span class="legend-item legend-brown">0–2</span>
           <span class="legend-item legend-red">3–7</span>
           <span class="legend-item legend-yellow">8–12</span>
           <span class="legend-item legend-green">13–17</span>
           <span class="legend-item legend-blue">18–20</span>
+          <span class="legend-item legend-vol">V = Volatility</span>
         </div>
         <div class="matrix-scroll">
           <table class="matchup-matrix" id="matchup-matrix">
@@ -53,6 +54,15 @@
             <tbody id="matrix-tbody"></tbody>
           </table>
         </div>
+
+        <!-- Table prefs panel (appears when cell selected) -->
+        <div class="table-prefs-panel" id="table-prefs-panel" style="display:none"></div>
+
+        <!-- Algorithm -->
+        <div class="algo-actions">
+          <button class="btn btn-primary" id="btn-run-algo">Analyze Optimal Pairings</button>
+        </div>
+        <div class="algorithm-results" id="algorithm-results" style="display:none"></div>
       </div>
 
       <div class="phase-actions">

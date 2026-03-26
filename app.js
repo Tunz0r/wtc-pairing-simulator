@@ -8,7 +8,10 @@ let teamBData = [];
 let tablesData = [];
 let roundDeployment = '';
 let roundMission = '';
-let matchupScores = {}; // keyed by "a{i}_b{j}" → score (0–20)
+let matchupScores = {};      // "a{i}_b{j}" → score (0–20)
+let matchupVolatility = {};  // "a{i}_b{j}" → volatility (0–5)
+let matchupTablePrefs = {};  // "a{i}_b{j}" → { tableIdx: 'good'|'bad'|'neutral' }
+let selectedMatrixCell = null; // currently selected cell key for table prefs
 
 // --- Initialization ---
 
@@ -117,63 +120,109 @@ function fillDummyTeams() {
 
 // --- Matchup Matrix ---
 
+function getMatrixPlayers() {
+  const a = [], b = [];
+  for (let i = 0; i < 8; i++) {
+    a.push({ faction: document.getElementById(`a-faction-${i}`).value.trim() || '?' });
+    b.push({ faction: document.getElementById(`b-faction-${i}`).value.trim() || '?' });
+  }
+  return { a, b };
+}
+
 function buildMatrix() {
   const thead = document.getElementById('matrix-thead');
   const tbody = document.getElementById('matrix-tbody');
+  const { a: teamA, b: teamB } = getMatrixPlayers();
 
-  // Read current names/factions from inputs
-  const teamAPlayers = [];
-  const teamBPlayers = [];
-  for (let i = 0; i < 8; i++) {
-    teamAPlayers.push({
-      name: document.getElementById(`a-name-${i}`).value.trim() || `A-Player ${i + 1}`,
-      faction: document.getElementById(`a-faction-${i}`).value.trim() || '?',
-    });
-    teamBPlayers.push({
-      name: document.getElementById(`b-name-${i}`).value.trim() || `B-Player ${i + 1}`,
-      faction: document.getElementById(`b-faction-${i}`).value.trim() || '?',
-    });
-  }
-
-  // Header row: empty corner + Team B faction columns
+  // Header row
   let headerHTML = '<tr><th class="matrix-corner"></th>';
   for (let j = 0; j < 8; j++) {
-    headerHTML += `<th class="col-header team-b-color" title="${teamBPlayers[j].faction}">${teamBPlayers[j].faction}</th>`;
+    headerHTML += `<th class="col-header team-b-color" title="${teamB[j].faction}">${teamB[j].faction}</th>`;
   }
   headerHTML += '</tr>';
   thead.innerHTML = headerHTML;
 
-  // Body rows: Team A faction row header + 8 input cells
+  // Body rows with score + volatility
   let bodyHTML = '';
   for (let i = 0; i < 8; i++) {
     bodyHTML += `<tr>`;
-    bodyHTML += `<th class="row-header team-a-color" title="${teamAPlayers[i].faction}">${teamAPlayers[i].faction}</th>`;
+    bodyHTML += `<th class="row-header team-a-color" title="${teamA[i].faction}">${teamA[i].faction}</th>`;
     for (let j = 0; j < 8; j++) {
       const key = `a${i}_b${j}`;
-      const val = matchupScores[key] !== undefined ? matchupScores[key] : '';
-      const cls = getMatrixCellClass(val);
-      bodyHTML += `<td class="${cls}"><input type="number" class="matrix-input" data-key="${key}" min="0" max="20" value="${val}" placeholder="—"></td>`;
+      const score = matchupScores[key] !== undefined ? matchupScores[key] : '';
+      const vol = matchupVolatility[key] !== undefined ? matchupVolatility[key] : '';
+      const cls = getMatrixCellClass(score);
+      const hasTablePrefs = matchupTablePrefs[key] && Object.keys(matchupTablePrefs[key]).length > 0;
+      const selClass = selectedMatrixCell === key ? ' matrix-cell-selected' : '';
+      const tpIndicator = hasTablePrefs ? '<span class="tp-dot" title="Has table preferences">&#9679;</span>' : '';
+      bodyHTML += `<td class="${cls}${selClass}" data-key="${key}">
+        <div class="cell-inputs">
+          <input type="number" class="matrix-input" data-key="${key}" min="0" max="20" value="${score}" placeholder="—" title="Expected score (0–20)">
+          <input type="number" class="matrix-vol" data-key="${key}" min="0" max="5" value="${vol}" placeholder="V" title="Volatility (0–5)">
+        </div>
+        ${tpIndicator}
+      </td>`;
     }
     bodyHTML += '</tr>';
   }
   tbody.innerHTML = bodyHTML;
 
-  // Listen for changes
+  // Score input handlers
   tbody.querySelectorAll('.matrix-input').forEach(input => {
     input.addEventListener('input', (e) => {
       let val = e.target.value.trim();
       const key = e.target.dataset.key;
       if (val === '') {
         delete matchupScores[key];
-        e.target.closest('td').className = 'matrix-cell-empty';
       } else {
         val = Math.max(0, Math.min(20, parseInt(val) || 0));
         e.target.value = val;
         matchupScores[key] = val;
-        e.target.closest('td').className = getMatrixCellClass(val);
+      }
+      updateCellColor(e.target.closest('td'), key);
+    });
+    // Prevent click from bubbling to cell selector
+    input.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  // Volatility input handlers
+  tbody.querySelectorAll('.matrix-vol').forEach(input => {
+    input.addEventListener('input', (e) => {
+      let val = e.target.value.trim();
+      const key = e.target.dataset.key;
+      if (val === '') {
+        delete matchupVolatility[key];
+      } else {
+        val = Math.max(0, Math.min(5, parseInt(val) || 0));
+        e.target.value = val;
+        matchupVolatility[key] = val;
       }
     });
+    input.addEventListener('click', (e) => e.stopPropagation());
   });
+
+  // Cell click → select for table prefs
+  tbody.querySelectorAll('td[data-key]').forEach(td => {
+    td.addEventListener('click', () => {
+      const key = td.dataset.key;
+      if (selectedMatrixCell === key) {
+        selectedMatrixCell = null;
+      } else {
+        selectedMatrixCell = key;
+      }
+      // Update selection highlight
+      tbody.querySelectorAll('td[data-key]').forEach(c => c.classList.toggle('matrix-cell-selected', c.dataset.key === selectedMatrixCell));
+      renderTablePrefsPanel();
+    });
+  });
+
+  renderTablePrefsPanel();
+}
+
+function updateCellColor(td, key) {
+  const val = matchupScores[key];
+  // Remove old color classes, keep selected
+  td.className = getMatrixCellClass(val) + (selectedMatrixCell === key ? ' matrix-cell-selected' : '');
 }
 
 function getMatrixCellClass(val) {
@@ -187,6 +236,407 @@ function getMatrixCellClass(val) {
   return 'matrix-cell-blue';
 }
 
+function renderTablePrefsPanel() {
+  const panel = document.getElementById('table-prefs-panel');
+  if (!selectedMatrixCell) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const key = selectedMatrixCell;
+  const [aIdx, bIdx] = key.replace('a','').split('_b').map(Number);
+  const { a: teamA, b: teamB } = getMatrixPlayers();
+  const prefs = matchupTablePrefs[key] || {};
+
+  // Get current deployment to show table/map names
+  const dep = document.getElementById('round-deployment').value;
+  const maps = dep ? WTC_MAPS[dep] : null;
+
+  let html = `
+    <div class="tp-header">
+      <span class="team-a-color">${teamA[aIdx].faction}</span>
+      <span class="tp-vs">vs</span>
+      <span class="team-b-color">${teamB[bIdx].faction}</span>
+      <span class="tp-label">— Table Preferences for Team A</span>
+    </div>
+    <div class="tp-buttons">
+  `;
+
+  for (let t = 0; t < 8; t++) {
+    const pref = prefs[t] || 'neutral';
+    const mapIdx = typeof WTC_TABLE_MAP_INDICES !== 'undefined' ? WTC_TABLE_MAP_INDICES[t] : t;
+    const mapName = maps ? maps[mapIdx].name : `Table ${t + 1}`;
+    const label = `T${t + 1}`;
+    html += `
+      <button class="tp-btn tp-${pref}" data-table="${t}" data-key="${key}" title="${mapName}">
+        <strong>${label}</strong>
+        <small>${mapName}</small>
+        <span class="tp-state">${pref === 'good' ? '✓' : pref === 'bad' ? '✗' : '—'}</span>
+      </button>
+    `;
+  }
+
+  html += `</div>
+    <p class="tp-hint">Click to cycle: neutral → good → bad → neutral</p>
+  `;
+
+  panel.innerHTML = html;
+  panel.style.display = '';
+
+  // Button handlers
+  panel.querySelectorAll('.tp-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = parseInt(btn.dataset.table);
+      const k = btn.dataset.key;
+      if (!matchupTablePrefs[k]) matchupTablePrefs[k] = {};
+      const current = matchupTablePrefs[k][t] || 'neutral';
+      const next = current === 'neutral' ? 'good' : current === 'good' ? 'bad' : 'neutral';
+      if (next === 'neutral') {
+        delete matchupTablePrefs[k][t];
+      } else {
+        matchupTablePrefs[k][t] = next;
+      }
+      renderTablePrefsPanel();
+      // Update dot indicator in matrix
+      const td = document.querySelector(`td[data-key="${k}"]`);
+      if (td) {
+        let dot = td.querySelector('.tp-dot');
+        const hasPrefs = matchupTablePrefs[k] && Object.keys(matchupTablePrefs[k]).length > 0;
+        if (hasPrefs && !dot) {
+          dot = document.createElement('span');
+          dot.className = 'tp-dot';
+          dot.title = 'Has table preferences';
+          dot.innerHTML = '&#9679;';
+          td.appendChild(dot);
+        } else if (!hasPrefs && dot) {
+          dot.remove();
+        }
+      }
+    });
+  });
+}
+
+// --- Optimal Pairing Algorithm ---
+
+function runOptimalPairing() {
+  const resultsEl = document.getElementById('algorithm-results');
+
+  // Validate: need all 64 scores
+  let missing = 0;
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      if (matchupScores[`a${i}_b${j}`] === undefined) missing++;
+    }
+  }
+  if (missing > 0) {
+    resultsEl.innerHTML = `<p class="algo-error">Please fill in all ${missing} missing matchup scores first.</p>`;
+    resultsEl.style.display = '';
+    return;
+  }
+
+  const { a: teamA, b: teamB } = getMatrixPlayers();
+
+  // Build score matrix [i][j] = Team A's expected score when a[i] faces b[j]
+  const S = [];
+  const V = [];
+  for (let i = 0; i < 8; i++) {
+    S[i] = [];
+    V[i] = [];
+    for (let j = 0; j < 8; j++) {
+      S[i][j] = matchupScores[`a${i}_b${j}`];
+      V[i][j] = matchupVolatility[`a${i}_b${j}`] || 0;
+    }
+  }
+
+  // Use Hungarian algorithm to find optimal assignment (maximize Team A score)
+  const bestAssignment = hungarianMax(S);
+  const bestTotal = bestAssignment.reduce((sum, j, i) => sum + S[i][j], 0);
+
+  // Also find worst case (minimize Team A = maximize Team B)
+  const worstAssignment = hungarianMin(S);
+  const worstTotal = worstAssignment.reduce((sum, j, i) => sum + S[i][j], 0);
+
+  // Find top 5 assignments by brute force sampling (full brute force for 8! = 40320)
+  const allPerms = getAllPermutations(8);
+  const scored = allPerms.map(perm => ({
+    perm,
+    total: perm.reduce((sum, j, i) => sum + S[i][j], 0),
+    avgVol: perm.reduce((sum, j, i) => sum + V[i][j], 0) / 8,
+  }));
+  scored.sort((a, b) => b.total - a.total);
+
+  const top5 = scored.slice(0, 5);
+  const bottom5 = scored.slice(-5).reverse();
+  const avg = scored.reduce((s, x) => s + x.total, 0) / scored.length;
+
+  // Generate pairing strategy recommendations
+  const strategy = generatePairingStrategy(S, V, teamA, teamB, bestAssignment);
+
+  // Render results
+  let html = `
+    <h3>Optimal Pairing Analysis</h3>
+    <div class="algo-summary">
+      <div class="algo-stat algo-stat-best">
+        <span class="algo-stat-label">Best Case</span>
+        <span class="algo-stat-value">${bestTotal}</span>
+      </div>
+      <div class="algo-stat algo-stat-avg">
+        <span class="algo-stat-label">Average</span>
+        <span class="algo-stat-value">${avg.toFixed(1)}</span>
+      </div>
+      <div class="algo-stat algo-stat-worst">
+        <span class="algo-stat-label">Worst Case</span>
+        <span class="algo-stat-value">${worstTotal}</span>
+      </div>
+    </div>
+
+    <h4>Best Pairing for Team A</h4>
+    <table class="algo-table">
+      <thead><tr><th>Team A</th><th>Team B</th><th>Score</th><th>Vol</th></tr></thead>
+      <tbody>
+        ${bestAssignment.map((j, i) => `
+          <tr>
+            <td class="team-a-color">${teamA[i].faction}</td>
+            <td class="team-b-color">${teamB[j].faction}</td>
+            <td class="${getMatrixCellClass(S[i][j])}" style="font-weight:700;text-align:center">${S[i][j]}</td>
+            <td style="text-align:center">${V[i][j] ? '±' + V[i][j] : '—'}</td>
+          </tr>
+        `).join('')}
+        <tr class="algo-total-row">
+          <td colspan="2"><strong>Total</strong></td>
+          <td style="text-align:center"><strong>${bestTotal}</strong></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Worst Pairing for Team A <small>(opponent's ideal)</small></h4>
+    <table class="algo-table">
+      <thead><tr><th>Team A</th><th>Team B</th><th>Score</th><th>Vol</th></tr></thead>
+      <tbody>
+        ${worstAssignment.map((j, i) => `
+          <tr>
+            <td class="team-a-color">${teamA[i].faction}</td>
+            <td class="team-b-color">${teamB[j].faction}</td>
+            <td class="${getMatrixCellClass(S[i][j])}" style="font-weight:700;text-align:center">${S[i][j]}</td>
+            <td style="text-align:center">${V[i][j] ? '±' + V[i][j] : '—'}</td>
+          </tr>
+        `).join('')}
+        <tr class="algo-total-row">
+          <td colspan="2"><strong>Total</strong></td>
+          <td style="text-align:center"><strong>${worstTotal}</strong></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Pairing Strategy Recommendations</h4>
+    <div class="algo-strategy">
+      ${strategy}
+    </div>
+  `;
+
+  resultsEl.innerHTML = html;
+  resultsEl.style.display = '';
+}
+
+function generatePairingStrategy(S, V, teamA, teamB, optimalAssignment) {
+  // Analyze which players are "flexible" (small range) vs "critical" (big range)
+  const playerAnalysis = [];
+  for (let i = 0; i < 8; i++) {
+    const scores = S[i].slice();
+    const min = Math.min(...scores);
+    const max = Math.max(...scores);
+    const avg = scores.reduce((a, b) => a + b, 0) / 8;
+    const range = max - min;
+    playerAnalysis.push({ idx: i, faction: teamA[i].faction, min, max, avg, range, scores });
+  }
+
+  // Opponent analysis
+  const oppAnalysis = [];
+  for (let j = 0; j < 8; j++) {
+    const scores = S.map(row => row[j]);
+    const min = Math.min(...scores);
+    const max = Math.max(...scores);
+    const avg = scores.reduce((a, b) => a + b, 0) / 8;
+    oppAnalysis.push({ idx: j, faction: teamB[j].faction, min, max, avg });
+  }
+
+  // Defender recommendation: put forward a player who is "safe" — small range, decent average
+  // The ideal defender is one whose worst matchup isn't terrible and who doesn't have a critical best matchup
+  const defenderCandidates = [...playerAnalysis].sort((a, b) => {
+    // Prefer players with high minimum scores (safe) and low range (not polarized)
+    const safeA = a.min * 2 - a.range;
+    const safeB = b.min * 2 - b.range;
+    return safeB - safeA;
+  });
+
+  // Attacker recommendation: players with the most polarized matchups (high range, low min)
+  // These are players you want to target specific opponents with
+  const attackerCandidates = [...playerAnalysis].sort((a, b) => b.range - a.range);
+
+  // Opponent vulnerability: which Team B players give Team A the most points on average
+  const oppVulnerable = [...oppAnalysis].sort((a, b) => b.avg - a.avg);
+
+  // Opponent threats: which Team B players take the most from Team A
+  const oppThreats = [...oppAnalysis].sort((a, b) => a.avg - b.avg);
+
+  let html = `
+    <div class="strat-section">
+      <h5>Defender Priorities <small>(safe, unpunishable picks)</small></h5>
+      <ol class="strat-list">
+        ${defenderCandidates.slice(0, 3).map(p => `
+          <li>
+            <strong class="team-a-color">${p.faction}</strong> —
+            Range: ${p.min}–${p.max}, Avg: ${p.avg.toFixed(1)}
+            <span class="strat-tag strat-safe">Safe pick</span>
+          </li>
+        `).join('')}
+      </ol>
+    </div>
+
+    <div class="strat-section">
+      <h5>Attacker Priorities <small>(target specific opponents)</small></h5>
+      <ol class="strat-list">
+        ${attackerCandidates.slice(0, 3).map(p => {
+          const bestJ = p.scores.indexOf(Math.max(...p.scores));
+          return `
+            <li>
+              <strong class="team-a-color">${p.faction}</strong> —
+              Best: ${Math.max(...p.scores)} vs <strong class="team-b-color">${teamB[bestJ].faction}</strong>,
+              Worst: ${p.min}
+              <span class="strat-tag strat-attack">High impact</span>
+            </li>
+          `;
+        }).join('')}
+      </ol>
+    </div>
+
+    <div class="strat-section">
+      <h5>Opponent Vulnerabilities <small>(target these)</small></h5>
+      <ol class="strat-list">
+        ${oppVulnerable.slice(0, 3).map(p => `
+          <li>
+            <strong class="team-b-color">${p.faction}</strong> —
+            Avg score for us: ${p.avg.toFixed(1)} (${p.min}–${p.max})
+            <span class="strat-tag strat-target">Target</span>
+          </li>
+        `).join('')}
+      </ol>
+    </div>
+
+    <div class="strat-section">
+      <h5>Opponent Threats <small>(protect against)</small></h5>
+      <ol class="strat-list">
+        ${oppThreats.slice(0, 3).map(p => `
+          <li>
+            <strong class="team-b-color">${p.faction}</strong> —
+            Avg score for us: ${p.avg.toFixed(1)} (${p.min}–${p.max})
+            <span class="strat-tag strat-danger">Dangerous</span>
+          </li>
+        `).join('')}
+      </ol>
+    </div>
+  `;
+
+  return html;
+}
+
+// --- Hungarian Algorithm (Kuhn-Munkres) for assignment ---
+
+function hungarianMax(matrix) {
+  // Convert to minimization by negating
+  const n = matrix.length;
+  const neg = matrix.map(row => row.map(v => -v));
+  return hungarianMin_internal(neg);
+}
+
+function hungarianMin(matrix) {
+  return hungarianMin_internal(matrix);
+}
+
+function hungarianMin_internal(cost) {
+  const n = cost.length;
+  // Pad to square if needed (already 8x8)
+  const u = new Array(n + 1).fill(0);
+  const v = new Array(n + 1).fill(0);
+  const p = new Array(n + 1).fill(0);
+  const way = new Array(n + 1).fill(0);
+
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(n + 1).fill(Infinity);
+    const used = new Array(n + 1).fill(false);
+
+    do {
+      used[j0] = true;
+      let i0 = p[j0], delta = Infinity, j1;
+
+      for (let j = 1; j <= n; j++) {
+        if (!used[j]) {
+          const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j]) {
+            minv[j] = cur;
+            way[j] = j0;
+          }
+          if (minv[j] < delta) {
+            delta = minv[j];
+            j1 = j;
+          }
+        }
+      }
+
+      for (let j = 0; j <= n; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+
+      j0 = j1;
+    } while (p[j0] !== 0);
+
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0);
+  }
+
+  // Extract assignment: result[i] = j (0-indexed)
+  const result = new Array(n);
+  for (let j = 1; j <= n; j++) {
+    result[p[j] - 1] = j - 1;
+  }
+  return result;
+}
+
+// Generate all permutations of [0..n-1]
+function getAllPermutations(n) {
+  const result = [];
+  const arr = Array.from({ length: n }, (_, i) => i);
+
+  function permute(start) {
+    if (start === n) {
+      result.push([...arr]);
+      return;
+    }
+    for (let i = start; i < n; i++) {
+      [arr[start], arr[i]] = [arr[i], arr[start]];
+      permute(start + 1);
+      [arr[start], arr[i]] = [arr[i], arr[start]];
+    }
+  }
+
+  permute(0);
+  return result;
+}
+
+// --- Matrix Reference (read-only for pairing phase) ---
+
 function buildMatrixReference() {
   const body = document.getElementById('matrix-ref-body');
   if (!teamAData.length || !teamBData.length) {
@@ -194,7 +644,6 @@ function buildMatrixReference() {
     return;
   }
 
-  // Build a read-only version of the matrix
   let html = `
     <div class="matrix-legend">
       <span class="legend-item legend-brown">0–2</span>
@@ -216,9 +665,11 @@ function buildMatrixReference() {
     teamBData.forEach((pB, j) => {
       const key = `a${i}_b${j}`;
       const val = matchupScores[key];
+      const vol = matchupVolatility[key];
       const cls = getMatrixCellClass(val);
       const display = val !== undefined ? val : '—';
-      html += `<td class="${cls}" style="font-weight:700">${display}</td>`;
+      const volDisplay = vol !== undefined ? `<small class="ref-vol">±${vol}</small>` : '';
+      html += `<td class="${cls}" style="font-weight:700;text-align:center">${display}${volDisplay}</td>`;
     });
     html += '</tr>';
   });
@@ -304,6 +755,7 @@ function showPhase(phaseName) {
 
 function bindPhaseActions() {
   document.getElementById('btn-fill-dummy').addEventListener('click', fillDummyTeams);
+  document.getElementById('btn-run-algo').addEventListener('click', runOptimalPairing);
   document.getElementById('btn-to-tables').addEventListener('click', () => {
     if (collectTeamData()) showPhase('tables');
   });

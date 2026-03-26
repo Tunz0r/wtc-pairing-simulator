@@ -368,9 +368,20 @@ header h1 {
   height: 36px;
 }
 
+.matchup-matrix td {
+  position: relative;
+  cursor: pointer;
+}
+
+.cell-inputs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
 .matrix-input {
   width: 100%;
-  height: 100%;
   border: none;
   background: transparent;
   text-align: center;
@@ -378,12 +389,62 @@ header h1 {
   font-size: 0.85rem;
   font-weight: 700;
   color: inherit;
-  padding: 4px;
+  padding: 2px 2px 0;
 }
 
 .matrix-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+.matrix-vol {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: inherit;
+  opacity: 0.7;
+  padding: 0 2px 2px;
+}
+
+.matrix-vol:focus {
+  outline: 1px solid var(--accent);
+  opacity: 1;
+}
+
+.matrix-vol::placeholder { font-size: 0.55rem; }
+
+.tp-dot {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 0.45rem;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.matrix-cell-selected {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: -2px;
+}
+
+/* Number input spinners removal */
+.matrix-input::-webkit-outer-spin-button,
+.matrix-input::-webkit-inner-spin-button,
+.matrix-vol::-webkit-outer-spin-button,
+.matrix-vol::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.matrix-input, .matrix-vol { -moz-appearance: textfield; }
+
+.legend-vol {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
 /* Matrix cell colors */
@@ -447,6 +508,228 @@ details[open] .matrix-ref-toggle::before {
   width: 36px;
   padding: 2px 4px;
   font-weight: 700;
+}
+
+/* Table Preferences Panel */
+.table-prefs-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.tp-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.tp-vs { color: var(--text-muted); font-size: 0.8rem; }
+.tp-label { color: var(--text-secondary); font-size: 0.75rem; font-weight: 400; }
+
+.tp-buttons {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.tp-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-primary);
+  transition: all 0.15s;
+}
+
+.tp-btn strong { font-size: 0.8rem; }
+.tp-btn small { font-size: 0.55rem; color: var(--text-secondary); text-align: center; line-height: 1.2; }
+.tp-state { font-size: 1rem; }
+
+.tp-neutral { border-color: var(--border); }
+.tp-neutral .tp-state { color: var(--text-muted); }
+
+.tp-good { border-color: var(--success); background: rgba(67, 160, 71, 0.15); }
+.tp-good .tp-state { color: var(--success); }
+
+.tp-bad { border-color: var(--team-a); background: rgba(198, 40, 40, 0.15); }
+.tp-bad .tp-state { color: var(--team-a); }
+
+.tp-btn:hover { transform: translateY(-1px); }
+
+.tp-hint {
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Algorithm */
+.algo-actions {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.algorithm-results {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.algorithm-results h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.algorithm-results h4 {
+  font-size: 0.9rem;
+  margin: 20px 0 8px;
+  color: var(--text-primary);
+}
+
+.algorithm-results h4 small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.algo-error {
+  color: var(--team-a);
+  font-weight: 600;
+}
+
+.algo-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.algo-stat {
+  text-align: center;
+  padding: 14px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.algo-stat-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.algo-stat-value {
+  display: block;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.algo-stat-best .algo-stat-value { color: var(--success); }
+.algo-stat-avg .algo-stat-value { color: var(--accent); }
+.algo-stat-worst .algo-stat-value { color: var(--team-a); }
+
+.algo-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.algo-table th {
+  background: var(--bg-card);
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.algo-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.85rem;
+}
+
+.algo-total-row td {
+  border-top: 2px solid var(--accent);
+  padding-top: 10px;
+}
+
+/* Strategy sections */
+.algo-strategy {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.strat-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.strat-section h5 {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.strat-section h5 small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.strat-list {
+  padding-left: 20px;
+  list-style: decimal;
+}
+
+.strat-list li {
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.strat-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.strat-safe { background: rgba(67, 160, 71, 0.2); color: var(--success); }
+.strat-attack { background: rgba(255, 214, 0, 0.2); color: var(--accent); }
+.strat-target { background: rgba(30, 136, 229, 0.2); color: #1e88e5; }
+.strat-danger { background: rgba(198, 40, 40, 0.2); color: var(--team-a); }
+
+.ref-vol {
+  display: block;
+  font-size: 0.55rem;
+  opacity: 0.7;
+  font-weight: 400;
 }
 
 /* Round Config */
