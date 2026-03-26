@@ -26,15 +26,34 @@ function buildPlayerInputs(containerId, team) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
   for (let i = 0; i < 8; i++) {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    row.innerHTML = `
-      <span class="player-num">${i + 1}</span>
-      <input type="text" class="player-name" id="${team}-name-${i}" placeholder="Player ${i + 1} Name" />
-      <input type="text" class="player-faction" id="${team}-faction-${i}" placeholder="Faction" list="faction-list" />
+    const wrapper = document.createElement('div');
+    wrapper.className = 'player-entry';
+    wrapper.innerHTML = `
+      <div class="player-row">
+        <span class="player-num">${i + 1}</span>
+        <input type="text" class="player-name" id="${team}-name-${i}" placeholder="Player ${i + 1} Name" />
+        <input type="text" class="player-faction" id="${team}-faction-${i}" placeholder="Faction" list="faction-list" />
+        <button type="button" class="btn-list-toggle" data-target="${team}-list-${i}" title="Army List">&#9776;</button>
+      </div>
+      <div class="army-list-wrap" id="${team}-list-wrap-${i}" style="display:none">
+        <textarea class="army-list-input" id="${team}-list-${i}" placeholder="Paste army list here..." rows="8"></textarea>
+      </div>
     `;
-    container.appendChild(row);
+    container.appendChild(wrapper);
   }
+
+  // Toggle army list textareas
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-list-toggle');
+    if (!btn) return;
+    const targetId = btn.dataset.target;
+    const wrap = document.getElementById(targetId.replace('list-', 'list-wrap-'));
+    if (wrap) {
+      const isOpen = wrap.style.display !== 'none';
+      wrap.style.display = isOpen ? 'none' : '';
+      btn.classList.toggle('active', !isOpen);
+    }
+  });
 
   // Add datalist for factions (once)
   if (!document.getElementById('faction-list')) {
@@ -194,11 +213,13 @@ function collectTeamData() {
   for (let i = 0; i < 8; i++) {
     const nameA = document.getElementById(`a-name-${i}`).value.trim() || `A-Player ${i + 1}`;
     const factionA = document.getElementById(`a-faction-${i}`).value.trim() || 'Unknown';
-    teamAData.push({ id: `a${i}`, name: nameA, faction: factionA });
+    const listA = document.getElementById(`a-list-${i}`).value.trim();
+    teamAData.push({ id: `a${i}`, name: nameA, faction: factionA, armyList: listA });
 
     const nameB = document.getElementById(`b-name-${i}`).value.trim() || `B-Player ${i + 1}`;
     const factionB = document.getElementById(`b-faction-${i}`).value.trim() || 'Unknown';
-    teamBData.push({ id: `b${i}`, name: nameB, faction: factionB });
+    const listB = document.getElementById(`b-list-${i}`).value.trim();
+    teamBData.push({ id: `b${i}`, name: nameB, faction: factionB, armyList: listB });
   }
 
   return true;
@@ -297,7 +318,7 @@ function renderMatches(state) {
     row.className = 'match-row';
     row.innerHTML = `
       <div class="match-player team-a-bg">
-        <strong>${pA.name}</strong>
+        <strong>${playerHTML(match.playerA, pA.name, pA.faction)}</strong>
         <span class="faction-tag">${pA.faction}</span>
       </div>
       <div class="match-info">
@@ -309,7 +330,7 @@ function renderMatches(state) {
         <div class="match-type">${match.type.replace(/_/g, ' ')}</div>
       </div>
       <div class="match-player team-b-bg">
-        <strong>${pB.name}</strong>
+        <strong>${playerHTML(match.playerB, pB.name, pB.faction)}</strong>
         <span class="faction-tag">${pB.faction}</span>
       </div>
     `;
@@ -323,12 +344,12 @@ function renderPools(state) {
 
   poolAEl.innerHTML = state.poolA.map(id => {
     const p = engine.getPlayer(id);
-    return `<div class="pool-player team-a-bg" data-id="${id}"><strong>${p.name}</strong><span>${p.faction}</span></div>`;
+    return `<div class="pool-player team-a-bg" data-id="${id}"><strong>${playerHTML(id, p.name, p.faction)}</strong><span>${p.faction}</span></div>`;
   }).join('');
 
   poolBEl.innerHTML = state.poolB.map(id => {
     const p = engine.getPlayer(id);
-    return `<div class="pool-player team-b-bg" data-id="${id}"><strong>${p.name}</strong><span>${p.faction}</span></div>`;
+    return `<div class="pool-player team-b-bg" data-id="${id}"><strong>${playerHTML(id, p.name, p.faction)}</strong><span>${p.faction}</span></div>`;
   }).join('');
 }
 
@@ -610,7 +631,7 @@ function renderTableSelect(panel, prompt, state) {
     panel.innerHTML = `
       <div class="table-select-section">
         <h3>Assign Table for Match #${matchNum}</h3>
-        <p class="match-preview">${pA.name} (${pA.faction}) vs ${pB.name} (${pB.faction})</p>
+        <p class="match-preview">${playerHTML(currentMatch.playerA, pA.name)} (${pA.faction}) vs ${playerHTML(currentMatch.playerB, pB.name)} (${pB.faction})</p>
         <p class="sel-hint">${whoChooses} chooses table</p>
         <div class="table-options" id="table-opts">
           ${remainingTables.map(tIdx => `
@@ -693,9 +714,9 @@ function renderResults() {
         <td>${i + 1}</td>
         <td>Table ${match.table + 1}</td>
         <td>${table ? mapNameHTML(table.mapId, table.map) : '—'}</td>
-        <td class="team-a-cell">${pA.name}<br><small>${pA.faction}</small></td>
+        <td class="team-a-cell">${playerHTML(match.playerA, pA.name)}<br><small>${pA.faction}</small></td>
         <td class="vs-cell">vs</td>
-        <td class="team-b-cell">${pB.name}<br><small>${pB.faction}</small></td>
+        <td class="team-b-cell">${playerHTML(match.playerB, pB.name)}<br><small>${pB.faction}</small></td>
         <td><span class="type-badge">${match.type.replace(/_/g, ' ')}</span></td>
       </tr>
     `;
@@ -718,41 +739,71 @@ function renderResults() {
 // --- Map Tooltip ---
 
 function initMapTooltip() {
-  const tooltip = document.getElementById('map-tooltip');
-  const tooltipImg = document.getElementById('map-tooltip-img');
-  const tooltipLabel = document.getElementById('map-tooltip-label');
+  const mapTip = document.getElementById('map-tooltip');
+  const mapImg = document.getElementById('map-tooltip-img');
+  const mapLabel = document.getElementById('map-tooltip-label');
+
+  const listTip = document.getElementById('list-tooltip');
+  const listHeader = document.getElementById('list-tooltip-header');
+  const listBody = document.getElementById('list-tooltip-body');
 
   document.addEventListener('mouseover', (e) => {
-    const target = e.target.closest('.map-hoverable');
-    if (!target) return;
+    // Map hover
+    const mapTarget = e.target.closest('.map-hoverable');
+    if (mapTarget) {
+      const mapId = mapTarget.dataset.mapId;
+      if (mapId) {
+        mapImg.src = `maps/${mapId}.jpg`;
+        mapLabel.textContent = mapTarget.dataset.mapName || '';
+        mapTip.classList.add('visible');
+        positionTooltip(e, mapTip, 480, 360);
+      }
+      return;
+    }
 
-    const mapId = target.dataset.mapId;
-    if (!mapId) return;
+    // Player hover
+    const playerTarget = e.target.closest('.player-hoverable');
+    if (playerTarget) {
+      const playerId = playerTarget.dataset.playerId;
+      if (!playerId) return;
+      const player = getPlayerData(playerId);
+      if (!player || !player.armyList) return;
 
-    tooltipImg.src = `maps/${mapId}.jpg`;
-    tooltipLabel.textContent = target.dataset.mapName || '';
-    tooltip.classList.add('visible');
-    positionTooltip(e, tooltip);
+      listHeader.textContent = `${player.name} — ${player.faction}`;
+      listBody.textContent = player.armyList;
+      listTip.classList.add('visible');
+      positionTooltip(e, listTip, 400, 300);
+      return;
+    }
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (tooltip.classList.contains('visible')) {
-      positionTooltip(e, tooltip);
+    if (mapTip.classList.contains('visible')) {
+      positionTooltip(e, mapTip, 480, 360);
+    }
+    if (listTip.classList.contains('visible')) {
+      positionTooltip(e, listTip, 400, 300);
     }
   });
 
   document.addEventListener('mouseout', (e) => {
-    const target = e.target.closest('.map-hoverable');
-    if (target) {
-      tooltip.classList.remove('visible');
+    if (e.target.closest('.map-hoverable')) {
+      mapTip.classList.remove('visible');
+    }
+    if (e.target.closest('.player-hoverable')) {
+      listTip.classList.remove('visible');
     }
   });
 }
 
-function positionTooltip(e, tooltip) {
+function getPlayerData(id) {
+  return teamAData.find(p => p.id === id) || teamBData.find(p => p.id === id);
+}
+
+function positionTooltip(e, tooltip, tooltipW, tooltipH) {
   const pad = 16;
-  const tooltipW = 480;
-  const tooltipH = 360;
+  tooltipW = tooltipW || 480;
+  tooltipH = tooltipH || 360;
 
   let x = e.clientX + pad;
   let y = e.clientY + pad;
@@ -773,11 +824,22 @@ function positionTooltip(e, tooltip) {
 
 /**
  * Returns an HTML string for a map name that shows a preview on hover.
- * Use this everywhere a map name is displayed.
  */
 function mapNameHTML(mapId, mapName) {
   if (!mapId) return mapName || '—';
   return `<span class="map-hoverable" data-map-id="${mapId}" data-map-name="${mapName}">${mapName}</span>`;
+}
+
+/**
+ * Returns HTML for a player name that shows their army list on hover.
+ */
+function playerHTML(playerId, name, faction) {
+  const player = getPlayerData(playerId);
+  const hasList = player && player.armyList;
+  if (hasList) {
+    return `<span class="player-hoverable" data-player-id="${playerId}">${name}</span>`;
+  }
+  return name;
 }
 
 // --- Boot ---
