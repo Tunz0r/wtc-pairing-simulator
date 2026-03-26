@@ -349,7 +349,10 @@ function renderTableChoiceToken(state) {
 // --- Action Panel Rendering ---
 
 function renderActionPanel(prompt, state) {
-  const panel = document.getElementById('action-content');
+  // Clone and replace the panel to remove ALL stale event listeners
+  const oldPanel = document.getElementById('action-content');
+  const panel = oldPanel.cloneNode(false);
+  oldPanel.parentNode.replaceChild(panel, oldPanel);
 
   switch (prompt.type) {
     case 'dual_select':
@@ -559,8 +562,9 @@ function renderRollOff(panel, prompt) {
 }
 
 function renderTableSelect(panel, prompt, state) {
-  const pendingMatches = prompt.matches;
-  const available = prompt.availableTables;
+  // Get pending matches directly from engine (not state copies)
+  const pendingMatches = engine.matches.filter(m => m.table === null);
+  const available = [...engine.availableTables];
 
   if (pendingMatches.length === 0) {
     engine.processInput({ tableAssignments: [] });
@@ -568,26 +572,26 @@ function renderTableSelect(panel, prompt, state) {
     return;
   }
 
+  // Order: token holder's defender first
+  const orderedMatches = [...pendingMatches];
+  if (prompt.firstTeam) {
+    orderedMatches.sort((a, b) => {
+      if (a.defenderTeam === prompt.firstTeam && b.defenderTeam !== prompt.firstTeam) return -1;
+      if (b.defenderTeam === prompt.firstTeam && a.defenderTeam !== prompt.firstTeam) return 1;
+      return 0;
+    });
+  }
+
   let assignments = [];
 
   const buildUI = () => {
     const assignedTables = assignments.map(a => a.tableIndex);
     const remainingTables = available.filter(t => !assignedTables.includes(t));
-
-    const orderedMatches = [...pendingMatches];
-    if (prompt.firstTeam) {
-      orderedMatches.sort((a, b) => {
-        if (a.defenderTeam === prompt.firstTeam && b.defenderTeam !== prompt.firstTeam) return -1;
-        if (b.defenderTeam === prompt.firstTeam && a.defenderTeam !== prompt.firstTeam) return 1;
-        return 0;
-      });
-    }
-
     const currentMatchIdx = assignments.length;
 
     if (currentMatchIdx >= orderedMatches.length) {
       const finalAssignments = orderedMatches.map((match, i) => ({
-        matchIndex: state.matches.indexOf(match),
+        matchIndex: engine.matches.indexOf(match),
         tableIndex: assignments[i].tableIndex,
       }));
       engine.processInput({ tableAssignments: finalAssignments });
@@ -598,12 +602,13 @@ function renderTableSelect(panel, prompt, state) {
     const currentMatch = orderedMatches[currentMatchIdx];
     const pA = engine.getPlayer(currentMatch.playerA);
     const pB = engine.getPlayer(currentMatch.playerB);
+    const matchNum = engine.matches.indexOf(currentMatch) + 1;
 
     const whoChooses = currentMatch.defenderTeam === prompt.firstTeam ? 'Token holder\'s defender' : 'Other defender';
 
     panel.innerHTML = `
       <div class="table-select-section">
-        <h3>Assign Table for Match #${state.matches.indexOf(currentMatch) + 1}</h3>
+        <h3>Assign Table for Match #${matchNum}</h3>
         <p class="match-preview">${pA.name} (${pA.faction}) vs ${pB.name} (${pB.faction})</p>
         <p class="sel-hint">${whoChooses} chooses table</p>
         <div class="table-options" id="table-opts">
