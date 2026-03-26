@@ -37,18 +37,42 @@
         </div>
       </div>
       <div class="phase-actions">
+        <button class="btn btn-accent" id="btn-fill-dummy">Fill Dummy Teams</button>
         <button class="btn btn-primary" id="btn-to-tables">Continue to Tables &amp; Maps →</button>
       </div>
     </section>
 
-    <!-- PHASE 2: Table & Map Setup -->
+    <!-- PHASE 2: Round Setup (Deployment + Mission) -->
     <section id="phase-tables" class="phase">
-      <h2>Table &amp; Map Configuration</h2>
-      <p class="phase-desc">Configure the 8 tables. Each table gets a deployment zone, map number, and mission.</p>
+      <h2>Round Setup</h2>
+      <p class="phase-desc">Select the deployment zone and mission for this round. The 8 tables are automatically assigned maps from the chosen deployment.</p>
+
+      <div class="round-config">
+        <div class="round-config-row">
+          <div class="config-field">
+            <label>Deployment Zone</label>
+            <select id="round-deployment">
+              <option value="">— Select —</option>
+              <optgroup label="Standard">
+                <!-- populated by JS -->
+              </optgroup>
+            </select>
+          </div>
+          <div class="config-field">
+            <label>Mission</label>
+            <select id="round-mission">
+              <option value="">— Select —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="tables-preview-title">Tables Preview</h3>
       <div class="tables-grid" id="tables-grid"></div>
+
       <div class="phase-actions">
         <button class="btn btn-secondary" id="btn-back-setup">← Back</button>
-        <button class="btn btn-accent" id="btn-randomize-tables">Randomize All</button>
+        <button class="btn btn-accent" id="btn-randomize-tables">Randomize</button>
         <button class="btn btn-primary" id="btn-to-pairing">Begin Pairing Process →</button>
       </div>
     </section>

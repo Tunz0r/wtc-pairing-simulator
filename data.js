@@ -75,6 +75,12 @@ const WTC_MISSIONS = [
   { id: 'deploy_servo_skulls', name: 'Deploy Servo-Skulls' },
 ];
 
+// The 8 WTC tables map to these map indices within a deployment type.
+// Map "4-5" is used for both table 4 and table 5.
+const WTC_TABLE_MAP_INDICES = [0, 1, 2, 3, 3, 4, 5, 6];
+// Readable labels for the tables
+const WTC_TABLE_LABELS = ['Map 1', 'Map 2', 'Map 3', 'Map 4-5', 'Map 4-5', 'Map 6', 'Map 7', 'Map 8'];
+
 // Common 40k Factions for autofill suggestions
 const FACTIONS_40K = [
   'Adepta Sororitas',
@@ -112,3 +118,52 @@ const FACTIONS_40K = [
   'White Scars',
   'World Eaters',
 ];
+
+// Space Marine chapters that count as the same "Space Marines" faction slot.
+// Grey Knights are NOT in this list — they are a separate faction.
+const SPACE_MARINE_CHAPTERS = [
+  'Space Marines',
+  'Black Templars',
+  'Blood Angels',
+  'Dark Angels',
+  'Deathwatch',
+  'Imperial Fists',
+  'Iron Hands',
+  'Raven Guard',
+  'Salamanders',
+  'Space Wolves',
+  'Ultramarines',
+  'White Scars',
+];
+
+// Unique factions for team building (each entry is one faction "slot").
+// One SM chapter per team is allowed, so we list all chapters as options for
+// the single SM slot. All non-SM factions are their own slot.
+const UNIQUE_FACTIONS = [
+  'Adepta Sororitas',
+  'Adeptus Custodes',
+  'Adeptus Mechanicus',
+  'Aeldari',
+  'Agents of the Imperium',
+  'Astra Militarum',
+  'Chaos Daemons',
+  'Chaos Knights',
+  'Chaos Space Marines',
+  'Death Guard',
+  'Drukhari',
+  'Emperor\'s Children',
+  'Genestealer Cults',
+  'Grey Knights',
+  'Imperial Knights',
+  'Leagues of Votann',
+  'Necrons',
+  'Orks',
+  'T\'au Empire',
+  'Thousand Sons',
+  'Tyranids',
+  'World Eaters',
+];
+
+// Dummy player names for testing
+const DUMMY_NAMES_A = ['Alex', 'Blake', 'Casey', 'Drew', 'Ellis', 'Frankie', 'Gray', 'Harper'];
+const DUMMY_NAMES_B = ['Jordan', 'Kelly', 'Logan', 'Morgan', 'Noel', 'Parker', 'Quinn', 'Riley'];

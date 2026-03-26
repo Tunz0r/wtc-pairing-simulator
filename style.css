@@ -239,11 +239,76 @@ header h1 {
 
 .player-faction { flex: 1.2; }
 
+/* Round Config */
+.round-config {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.round-config-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.config-field label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.config-field select {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+}
+
+.config-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tables-preview-title {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.round-info-bar {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 20px;
+  padding: 10px 20px;
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.round-info-bar strong {
+  color: var(--accent);
+}
+
 /* Tables Grid */
 .tables-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .table-card {
@@ -251,38 +316,32 @@ header h1 {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px;
+  text-align: center;
+}
+
+.table-card-empty {
+  opacity: 0.4;
 }
 
 .table-card h3 {
   font-family: 'Orbitron', sans-serif;
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: var(--accent);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
-.table-card label {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin: 8px 0 4px;
+.table-map-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.table-map-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.table-card select {
-  width: 100%;
-  padding: 8px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-  font-size: 0.8rem;
-}
-
-.table-card select:focus {
-  outline: none;
-  border-color: var(--accent);
 }
 
 /* Pairing Board */

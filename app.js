@@ -6,13 +6,15 @@ let engine = null;
 let teamAData = [];
 let teamBData = [];
 let tablesData = [];
+let roundDeployment = '';
+let roundMission = '';
 
 // --- Initialization ---
 
 function init() {
   buildPlayerInputs('team-a-players', 'a');
   buildPlayerInputs('team-b-players', 'b');
-  buildTablesGrid();
+  buildRoundConfig();
   bindNavigation();
   bindPhaseActions();
 }
@@ -46,55 +48,9 @@ function buildPlayerInputs(containerId, team) {
   }
 }
 
-// --- Tables Grid ---
+// --- Dummy Data ---
 
-function buildTablesGrid() {
-  const grid = document.getElementById('tables-grid');
-  grid.innerHTML = '';
-  for (let i = 0; i < 8; i++) {
-    const card = document.createElement('div');
-    card.className = 'table-card';
-    card.innerHTML = `
-      <h3>Table ${i + 1}</h3>
-      <label>Deployment</label>
-      <select class="table-deployment" id="table-dep-${i}" onchange="onDeploymentChange(${i})">
-        <option value="">— Select —</option>
-        ${WTC_DEPLOYMENTS.map(d => `<option value="${d}">${d}</option>`).join('')}
-        <optgroup label="BETA">
-          ${WTC_DEPLOYMENTS_BETA.map(d => `<option value="${d}">${d} (BETA)</option>`).join('')}
-        </optgroup>
-      </select>
-      <label>Map</label>
-      <select class="table-map" id="table-map-${i}">
-        <option value="">— Select deployment first —</option>
-      </select>
-      <label>Mission</label>
-      <select class="table-mission" id="table-mission-${i}">
-        <option value="">— Select —</option>
-        ${WTC_MISSIONS.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
-      </select>
-    `;
-    grid.appendChild(card);
-  }
-}
-
-function onDeploymentChange(tableIdx) {
-  const dep = document.getElementById(`table-dep-${tableIdx}`).value;
-  const mapSelect = document.getElementById(`table-map-${tableIdx}`);
-  mapSelect.innerHTML = '';
-  if (!dep || !WTC_MAPS[dep]) {
-    mapSelect.innerHTML = '<option value="">— Select deployment first —</option>';
-    return;
-  }
-  mapSelect.innerHTML = '<option value="">— Select —</option>' +
-    WTC_MAPS[dep].map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-}
-
-function randomizeTables() {
-  const allDeployments = [...WTC_DEPLOYMENTS];
-  const missions = [...WTC_MISSIONS];
-
-  // Shuffle helpers
+function fillDummyTeams() {
   const shuffle = arr => {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
@@ -104,25 +60,87 @@ function randomizeTables() {
     return a;
   };
 
-  const shuffledMissions = shuffle(missions).slice(0, 8);
+  // Build a valid team of 8 unique factions.
+  // Pick 7 from UNIQUE_FACTIONS + 1 SM chapter, or 8 from UNIQUE_FACTIONS.
+  // We always include one SM chapter slot for variety.
+  function pickTeamFactions() {
+    const nonSM = shuffle(UNIQUE_FACTIONS);
+    const smChapter = shuffle(SPACE_MARINE_CHAPTERS)[0];
+    // Take 7 non-SM factions + 1 SM chapter
+    const picked = nonSM.slice(0, 7);
+    picked.push(smChapter);
+    return shuffle(picked);
+  }
+
+  const factionsA = pickTeamFactions();
+  const factionsB = pickTeamFactions();
 
   for (let i = 0; i < 8; i++) {
-    // Pick a random deployment
-    const dep = allDeployments[Math.floor(Math.random() * allDeployments.length)];
-    const depSelect = document.getElementById(`table-dep-${i}`);
-    depSelect.value = dep;
-    onDeploymentChange(i);
-
-    // Pick a random map from that deployment
-    const maps = WTC_MAPS[dep];
-    if (maps && maps.length > 0) {
-      const map = maps[Math.floor(Math.random() * maps.length)];
-      document.getElementById(`table-map-${i}`).value = map.id;
-    }
-
-    // Assign mission
-    document.getElementById(`table-mission-${i}`).value = shuffledMissions[i].id;
+    document.getElementById(`a-name-${i}`).value = DUMMY_NAMES_A[i];
+    document.getElementById(`a-faction-${i}`).value = factionsA[i];
+    document.getElementById(`b-name-${i}`).value = DUMMY_NAMES_B[i];
+    document.getElementById(`b-faction-${i}`).value = factionsB[i];
   }
+
+  document.getElementById('team-a-name').value = 'Waaagh Warriors';
+  document.getElementById('team-b-name').value = 'Hive Fleet Sigma';
+}
+
+// --- Round Config (Deployment + Mission) ---
+
+function buildRoundConfig() {
+  const depSelect = document.getElementById('round-deployment');
+  depSelect.innerHTML = `
+    <option value="">— Select Deployment —</option>
+    ${WTC_DEPLOYMENTS.map(d => `<option value="${d}">${d}</option>`).join('')}
+    <optgroup label="BETA">
+      ${WTC_DEPLOYMENTS_BETA.map(d => `<option value="${d}">${d} (BETA)</option>`).join('')}
+    </optgroup>
+  `;
+
+  const missionSelect = document.getElementById('round-mission');
+  missionSelect.innerHTML = `
+    <option value="">— Select Mission —</option>
+    ${WTC_MISSIONS.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
+  `;
+
+  depSelect.addEventListener('change', updateTablesPreview);
+  missionSelect.addEventListener('change', updateTablesPreview);
+
+  updateTablesPreview();
+}
+
+function updateTablesPreview() {
+  const dep = document.getElementById('round-deployment').value;
+  const grid = document.getElementById('tables-grid');
+  grid.innerHTML = '';
+
+  const maps = dep ? WTC_MAPS[dep] : null;
+
+  for (let i = 0; i < 8; i++) {
+    const mapIdx = WTC_TABLE_MAP_INDICES[i];
+    const map = maps ? maps[mapIdx] : null;
+    const card = document.createElement('div');
+    card.className = 'table-card' + (map ? '' : ' table-card-empty');
+    card.innerHTML = `
+      <h3>Table ${i + 1}</h3>
+      <div class="table-map-name">${map ? map.name : '—'}</div>
+      <div class="table-map-label">${WTC_TABLE_LABELS[i]}</div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function randomizeRound() {
+  const allDeps = [...WTC_DEPLOYMENTS];
+  const dep = allDeps[Math.floor(Math.random() * allDeps.length)];
+  document.getElementById('round-deployment').value = dep;
+
+  const missions = [...WTC_MISSIONS];
+  const mission = missions[Math.floor(Math.random() * missions.length)];
+  document.getElementById('round-mission').value = mission.id;
+
+  updateTablesPreview();
 }
 
 // --- Navigation ---
@@ -144,11 +162,12 @@ function showPhase(phaseName) {
 }
 
 function bindPhaseActions() {
+  document.getElementById('btn-fill-dummy').addEventListener('click', fillDummyTeams);
   document.getElementById('btn-to-tables').addEventListener('click', () => {
     if (collectTeamData()) showPhase('tables');
   });
   document.getElementById('btn-back-setup').addEventListener('click', () => showPhase('setup'));
-  document.getElementById('btn-randomize-tables').addEventListener('click', randomizeTables);
+  document.getElementById('btn-randomize-tables').addEventListener('click', randomizeRound);
   document.getElementById('btn-to-pairing').addEventListener('click', () => {
     if (collectTableData()) {
       startPairing();
@@ -185,24 +204,37 @@ function collectTeamData() {
 }
 
 function collectTableData() {
+  const dep = document.getElementById('round-deployment').value;
+  const missionId = document.getElementById('round-mission').value;
+
+  if (!dep) {
+    alert('Please select a deployment zone.');
+    return false;
+  }
+  if (!missionId) {
+    alert('Please select a mission.');
+    return false;
+  }
+
+  roundDeployment = dep;
+  roundMission = WTC_MISSIONS.find(m => m.id === missionId)?.name || missionId;
+
+  const maps = WTC_MAPS[dep];
   tablesData = [];
+
   for (let i = 0; i < 8; i++) {
-    const dep = document.getElementById(`table-dep-${i}`).value;
-    const map = document.getElementById(`table-map-${i}`).value;
-    const mission = document.getElementById(`table-mission-${i}`).value;
-
-    const mapName = map ? (WTC_MAPS[dep] || []).find(m => m.id === map)?.name || map : 'No map';
-    const missionName = mission ? WTC_MISSIONS.find(m => m.id === mission)?.name || mission : 'No mission';
-
+    const mapIdx = WTC_TABLE_MAP_INDICES[i];
+    const map = maps[mapIdx];
     tablesData.push({
       index: i,
-      deployment: dep || 'Not set',
-      map: mapName,
-      mapId: map,
-      mission: missionName,
-      missionId: mission,
+      deployment: dep,
+      map: map.name,
+      mapId: map.id,
+      mission: roundMission,
+      missionId: missionId,
     });
   }
+
   return true;
 }
 
@@ -223,19 +255,10 @@ function renderPairingState() {
   const state = engine.getState();
   const prompt = engine.getCurrentPrompt();
 
-  // Update title
   updateStepTitle(state, prompt);
-
-  // Render matched pairs
   renderMatches(state);
-
-  // Render available pools
   renderPools(state);
-
-  // Table choice token
   renderTableChoiceToken(state);
-
-  // Render action panel
   renderActionPanel(prompt, state);
 }
 
@@ -281,7 +304,6 @@ function renderMatches(state) {
         ${tableInfo ? `
           <div class="match-table">Table ${match.table + 1}</div>
           <div class="match-map">${tableInfo.map}</div>
-          <div class="match-mission">${tableInfo.mission}</div>
         ` : '<div class="match-table pending">Table TBD</div>'}
         <div class="match-type">${match.type.replace(/_/g, ' ')}</div>
       </div>
@@ -384,7 +406,6 @@ function renderDualSelect(panel, prompt) {
 
   panel.innerHTML = html;
 
-  // Bind selection
   panel.querySelectorAll('#sel-a .sel-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       panel.querySelectorAll('#sel-a .sel-btn').forEach(b => b.classList.remove('selected'));
@@ -409,17 +430,13 @@ function renderDualSelect(panel, prompt) {
     }
   }
 
-  // Use event delegation for reveal button
   panel.addEventListener('click', (e) => {
     if (e.target.id === 'btn-reveal' || e.target.closest('#btn-reveal')) {
-      // Determine which input keys to use based on current step
       const step = engine.step;
       let input;
       if (step === 'choose_defenders' || step === 'r3_choose_defenders') {
         input = { defenderA: selectedA, defenderB: selectedB };
-      } else if (step === 'refuse_attackers') {
-        input = { refuseA: selectedA, refuseB: selectedB };
-      } else if (step === 'r3_refuse_attackers') {
+      } else if (step === 'refuse_attackers' || step === 'r3_refuse_attackers') {
         input = { refuseA: selectedA, refuseB: selectedB };
       }
       const result = engine.processInput(input);
@@ -546,7 +563,6 @@ function renderTableSelect(panel, prompt, state) {
   const available = prompt.availableTables;
 
   if (pendingMatches.length === 0) {
-    // Auto-advance if no pending matches
     engine.processInput({ tableAssignments: [] });
     renderPairingState();
     return;
@@ -558,7 +574,6 @@ function renderTableSelect(panel, prompt, state) {
     const assignedTables = assignments.map(a => a.tableIndex);
     const remainingTables = available.filter(t => !assignedTables.includes(t));
 
-    // Determine order: token holder's defender first
     const orderedMatches = [...pendingMatches];
     if (prompt.firstTeam) {
       orderedMatches.sort((a, b) => {
@@ -571,7 +586,6 @@ function renderTableSelect(panel, prompt, state) {
     const currentMatchIdx = assignments.length;
 
     if (currentMatchIdx >= orderedMatches.length) {
-      // All assigned — build final assignments with correct indices
       const finalAssignments = orderedMatches.map((match, i) => ({
         matchIndex: state.matches.indexOf(match),
         tableIndex: assignments[i].tableIndex,
@@ -597,7 +611,6 @@ function renderTableSelect(panel, prompt, state) {
             <button class="table-btn" data-table="${tIdx}">
               <strong>Table ${tIdx + 1}</strong>
               <span>${tablesData[tIdx].map}</span>
-              <span>${tablesData[tIdx].mission}</span>
             </button>
           `).join('')}
         </div>
@@ -643,24 +656,26 @@ function renderResults() {
       <div>vs</div>
       <div class="team-b-color"><strong>${teamBName}</strong></div>
     </div>
+    <div class="round-info-bar">
+      <span>Deployment: <strong>${roundDeployment}</strong></span>
+      <span>Mission: <strong>${roundMission}</strong></span>
+    </div>
     <div class="results-table">
       <table>
         <thead>
           <tr>
             <th>#</th>
             <th>Table</th>
+            <th>Map</th>
             <th>${teamAName}</th>
             <th>vs</th>
             <th>${teamBName}</th>
-            <th>Map</th>
-            <th>Mission</th>
             <th>Type</th>
           </tr>
         </thead>
         <tbody>
   `;
 
-  // Sort by table number
   const sorted = [...state.matches].sort((a, b) => (a.table || 0) - (b.table || 0));
 
   sorted.forEach((match, i) => {
@@ -671,11 +686,10 @@ function renderResults() {
       <tr>
         <td>${i + 1}</td>
         <td>Table ${match.table + 1}</td>
+        <td>${table ? table.map : '—'}</td>
         <td class="team-a-cell">${pA.name}<br><small>${pA.faction}</small></td>
         <td class="vs-cell">vs</td>
         <td class="team-b-cell">${pB.name}<br><small>${pB.faction}</small></td>
-        <td>${table ? table.map : '—'}</td>
-        <td>${table ? table.mission : '—'}</td>
         <td><span class="type-badge">${match.type.replace(/_/g, ' ')}</span></td>
       </tr>
     `;
@@ -683,7 +697,6 @@ function renderResults() {
 
   html += `</tbody></table></div>`;
 
-  // Event log
   html += `
     <div class="event-log">
       <h3>Pairing Log</h3>
