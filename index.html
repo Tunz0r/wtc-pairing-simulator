@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WTC 8-Man Pairing Simulator</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>WTC 8-Man Pairing Simulator</h1>
+      <p class="subtitle">World Team Championship — Warhammer 40,000</p>
+    </header>
+
+    <nav id="phase-nav">
+      <button class="phase-btn active" data-phase="setup">1. Team Setup</button>
+      <button class="phase-btn" data-phase="tables">2. Tables &amp; Maps</button>
+      <button class="phase-btn" data-phase="pairing">3. Pairing Process</button>
+      <button class="phase-btn" data-phase="results">4. Results</button>
+    </nav>
+
+    <!-- PHASE 1: Team Setup -->
+    <section id="phase-setup" class="phase active">
+      <div class="setup-grid">
+        <div class="team-setup" id="team-a-setup">
+          <h2>Team A</h2>
+          <input type="text" class="team-name-input" id="team-a-name" placeholder="Team A Name" value="Team A">
+          <div class="players-list" id="team-a-players"></div>
+        </div>
+        <div class="team-setup" id="team-b-setup">
+          <h2>Team B</h2>
+          <input type="text" class="team-name-input" id="team-b-name" placeholder="Team B Name" value="Team B">
+          <div class="players-list" id="team-b-players"></div>
+        </div>
+      </div>
+      <div class="phase-actions">
+        <button class="btn btn-primary" id="btn-to-tables">Continue to Tables &amp; Maps →</button>
+      </div>
+    </section>
+
+    <!-- PHASE 2: Table & Map Setup -->
+    <section id="phase-tables" class="phase">
+      <h2>Table &amp; Map Configuration</h2>
+      <p class="phase-desc">Configure the 8 tables. Each table gets a deployment zone, map number, and mission.</p>
+      <div class="tables-grid" id="tables-grid"></div>
+      <div class="phase-actions">
+        <button class="btn btn-secondary" id="btn-back-setup">← Back</button>
+        <button class="btn btn-accent" id="btn-randomize-tables">Randomize All</button>
+        <button class="btn btn-primary" id="btn-to-pairing">Begin Pairing Process →</button>
+      </div>
+    </section>
+
+    <!-- PHASE 3: Pairing Process -->
+    <section id="phase-pairing" class="phase">
+      <div class="pairing-header">
+        <h2 id="pairing-step-title">Pairing Round 1 — Step 1</h2>
+        <p id="pairing-step-desc" class="phase-desc"></p>
+      </div>
+
+      <div class="pairing-layout">
+        <!-- Visual board -->
+        <div class="pairing-board">
+          <div class="board-row board-header-row">
+            <div class="board-cell header-cell team-a-color">
+              <span id="board-team-a-name">Team A</span>
+            </div>
+            <div class="board-cell header-cell versus">VS</div>
+            <div class="board-cell header-cell team-b-color">
+              <span id="board-team-b-name">Team B</span>
+            </div>
+          </div>
+
+          <div id="board-matches"></div>
+
+          <div class="board-section">
+            <h3>Available Players</h3>
+            <div class="available-row">
+              <div class="available-pool" id="pool-a"></div>
+              <div class="available-pool" id="pool-b"></div>
+            </div>
+          </div>
+
+          <div class="board-section" id="table-choice-section" style="display:none">
+            <div class="table-choice-token" id="table-choice-token">
+              Table Choice: <span id="table-choice-team">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action panel -->
+        <div class="action-panel" id="action-panel">
+          <div id="action-content"></div>
+        </div>
+      </div>
+
+      <div class="phase-actions">
+        <button class="btn btn-secondary" id="btn-back-tables">← Back to Tables</button>
+        <button class="btn btn-secondary" id="btn-reset-pairing">Reset Pairing</button>
+      </div>
+    </section>
+
+    <!-- PHASE 4: Results -->
+    <section id="phase-results" class="phase">
+      <h2>Pairing Results</h2>
+      <div id="results-content"></div>
+      <div class="phase-actions">
+        <button class="btn btn-secondary" id="btn-back-pairing">← Back to Pairing</button>
+        <button class="btn btn-primary" id="btn-new-round">New Round</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="pairing-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
