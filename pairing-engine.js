@@ -12,7 +12,7 @@
 
 class PairingEngine {
   constructor(teamA, teamB, tables) {
-    // teamA/teamB: arrays of { id, name, faction }
+    // teamA/teamB: arrays of { id, faction }
     this.teamA = [...teamA];
     this.teamB = [...teamB];
     this.tables = [...tables]; // 8 tables with map/mission info
@@ -64,7 +64,7 @@ class PairingEngine {
 
   getPlayerName(id) {
     const p = this.getPlayer(id);
-    return p ? `${p.name} (${p.faction})` : id;
+    return p ? p.faction : id;
   }
 
   getState() {

@@ -164,6 +164,3 @@ const UNIQUE_FACTIONS = [
   'World Eaters',
 ];
 
-// Dummy player names for testing
-const DUMMY_NAMES_A = ['Alex', 'Blake', 'Casey', 'Drew', 'Ellis', 'Frankie', 'Gray', 'Harper'];
-const DUMMY_NAMES_B = ['Jordan', 'Kelly', 'Logan', 'Morgan', 'Noel', 'Parker', 'Quinn', 'Riley'];

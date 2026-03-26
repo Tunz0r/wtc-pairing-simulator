@@ -221,7 +221,7 @@ header h1 {
   font-size: 0.85rem;
 }
 
-.player-name, .player-faction {
+.player-faction {
   flex: 1;
   padding: 8px 10px;
   background: var(--bg-surface);
@@ -232,12 +232,10 @@ header h1 {
   font-size: 0.85rem;
 }
 
-.player-name:focus, .player-faction:focus {
+.player-faction:focus {
   outline: none;
   border-color: var(--accent);
 }
-
-.player-faction { flex: 1.2; }
 
 .player-entry {
   margin-bottom: 4px;
@@ -333,7 +331,7 @@ header h1 {
 .matchup-matrix td {
   border: 1px solid var(--border);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
 }
 
 .matchup-matrix th {
@@ -348,18 +346,19 @@ header h1 {
   writing-mode: vertical-rl;
   text-orientation: mixed;
   transform: rotate(180deg);
-  height: 90px;
-  padding: 6px 2px;
-  min-width: 44px;
+  height: 100px;
+  padding: 8px 4px;
+  min-width: 72px;
 }
 
 .matchup-matrix th.row-header {
   text-align: right;
-  padding: 4px 8px;
+  padding: 8px 12px;
   white-space: nowrap;
-  max-width: 130px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.8rem;
 }
 
 .matchup-matrix td {
@@ -371,13 +370,16 @@ header h1 {
 .matchup-matrix td {
   position: relative;
   cursor: pointer;
+  width: 72px;
+  height: 56px;
+  padding: 4px;
 }
 
 .cell-inputs {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
 }
 
 .matrix-input {
@@ -386,10 +388,11 @@ header h1 {
   background: transparent;
   text-align: center;
   font-family: 'Inter', sans-serif;
-  font-size: 0.85rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: inherit;
-  padding: 2px 2px 0;
+  padding: 4px 2px 0;
+  height: 28px;
 }
 
 .matrix-input:focus {
@@ -400,22 +403,25 @@ header h1 {
 .matrix-vol {
   width: 100%;
   border: none;
-  background: transparent;
+  background: rgba(0,0,0,0.15);
+  border-radius: 3px;
   text-align: center;
   font-family: 'Inter', sans-serif;
-  font-size: 0.6rem;
-  font-weight: 500;
+  font-size: 0.7rem;
+  font-weight: 600;
   color: inherit;
-  opacity: 0.7;
-  padding: 0 2px 2px;
+  opacity: 0.8;
+  padding: 2px 2px;
+  height: 20px;
 }
 
 .matrix-vol:focus {
   outline: 1px solid var(--accent);
   opacity: 1;
+  background: rgba(0,0,0,0.3);
 }
 
-.matrix-vol::placeholder { font-size: 0.55rem; }
+.matrix-vol::placeholder { font-size: 0.65rem; opacity: 0.5; }
 
 .tp-dot {
   position: absolute;
