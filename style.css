@@ -754,6 +754,49 @@ header h1 {
   }
 }
 
+/* Map tooltip */
+.map-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--bg-dark);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  max-width: 480px;
+}
+
+.map-tooltip.visible {
+  display: block;
+}
+
+.map-tooltip img {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius);
+}
+
+.map-tooltip-label {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--accent);
+  padding: 4px 0 2px;
+  font-weight: 600;
+}
+
+/* Hoverable map name styling */
+.map-hoverable {
+  cursor: help;
+  border-bottom: 1px dashed var(--accent);
+  transition: color 0.15s;
+}
+
+.map-hoverable:hover {
+  color: var(--accent);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-dark); }

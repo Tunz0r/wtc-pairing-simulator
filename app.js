@@ -17,6 +17,7 @@ function init() {
   buildRoundConfig();
   bindNavigation();
   bindPhaseActions();
+  initMapTooltip();
 }
 
 // --- Player Input Setup ---
@@ -124,7 +125,7 @@ function updateTablesPreview() {
     card.className = 'table-card' + (map ? '' : ' table-card-empty');
     card.innerHTML = `
       <h3>Table ${i + 1}</h3>
-      <div class="table-map-name">${map ? map.name : '—'}</div>
+      <div class="table-map-name">${map ? mapNameHTML(map.id, map.name) : '—'}</div>
       <div class="table-map-label">${WTC_TABLE_LABELS[i]}</div>
     `;
     grid.appendChild(card);
@@ -303,7 +304,7 @@ function renderMatches(state) {
         <div class="match-number">#${idx + 1}</div>
         ${tableInfo ? `
           <div class="match-table">Table ${match.table + 1}</div>
-          <div class="match-map">${tableInfo.map}</div>
+          <div class="match-map">${mapNameHTML(tableInfo.mapId, tableInfo.map)}</div>
         ` : '<div class="match-table pending">Table TBD</div>'}
         <div class="match-type">${match.type.replace(/_/g, ' ')}</div>
       </div>
@@ -615,7 +616,7 @@ function renderTableSelect(panel, prompt, state) {
           ${remainingTables.map(tIdx => `
             <button class="table-btn" data-table="${tIdx}">
               <strong>Table ${tIdx + 1}</strong>
-              <span>${tablesData[tIdx].map}</span>
+              <span>${mapNameHTML(tablesData[tIdx].mapId, tablesData[tIdx].map)}</span>
             </button>
           `).join('')}
         </div>
@@ -691,7 +692,7 @@ function renderResults() {
       <tr>
         <td>${i + 1}</td>
         <td>Table ${match.table + 1}</td>
-        <td>${table ? table.map : '—'}</td>
+        <td>${table ? mapNameHTML(table.mapId, table.map) : '—'}</td>
         <td class="team-a-cell">${pA.name}<br><small>${pA.faction}</small></td>
         <td class="vs-cell">vs</td>
         <td class="team-b-cell">${pB.name}<br><small>${pB.faction}</small></td>
@@ -712,6 +713,71 @@ function renderResults() {
   `;
 
   container.innerHTML = html;
+}
+
+// --- Map Tooltip ---
+
+function initMapTooltip() {
+  const tooltip = document.getElementById('map-tooltip');
+  const tooltipImg = document.getElementById('map-tooltip-img');
+  const tooltipLabel = document.getElementById('map-tooltip-label');
+
+  document.addEventListener('mouseover', (e) => {
+    const target = e.target.closest('.map-hoverable');
+    if (!target) return;
+
+    const mapId = target.dataset.mapId;
+    if (!mapId) return;
+
+    tooltipImg.src = `maps/${mapId}.jpg`;
+    tooltipLabel.textContent = target.dataset.mapName || '';
+    tooltip.classList.add('visible');
+    positionTooltip(e, tooltip);
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (tooltip.classList.contains('visible')) {
+      positionTooltip(e, tooltip);
+    }
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const target = e.target.closest('.map-hoverable');
+    if (target) {
+      tooltip.classList.remove('visible');
+    }
+  });
+}
+
+function positionTooltip(e, tooltip) {
+  const pad = 16;
+  const tooltipW = 480;
+  const tooltipH = 360;
+
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+
+  // Keep within viewport
+  if (x + tooltipW > window.innerWidth) {
+    x = e.clientX - tooltipW - pad;
+  }
+  if (y + tooltipH > window.innerHeight) {
+    y = e.clientY - tooltipH - pad;
+  }
+  if (x < 0) x = pad;
+  if (y < 0) y = pad;
+
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+
+/**
+ * Returns an HTML string for a map name that shows a preview on hover.
+ * Use this everywhere a map name is displayed.
+ */
+function mapNameHTML(mapId, mapName) {
+  if (!mapId) return mapName || '—';
+  return `<span class="map-hoverable" data-map-id="${mapId}" data-map-name="${mapName}">${mapName}</span>`;
 }
 
 // --- Boot ---
