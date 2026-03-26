@@ -135,20 +135,19 @@ function buildMatrix() {
     });
   }
 
-  // Header row: empty corner + Team B player columns
+  // Header row: empty corner + Team B faction columns
   let headerHTML = '<tr><th class="matrix-corner"></th>';
   for (let j = 0; j < 8; j++) {
-    const label = teamBPlayers[j].name + (teamBPlayers[j].faction !== '?' ? `\n${teamBPlayers[j].faction}` : '');
-    headerHTML += `<th class="col-header team-b-color" title="${teamBPlayers[j].name} — ${teamBPlayers[j].faction}">${teamBPlayers[j].name}<br><small>${teamBPlayers[j].faction}</small></th>`;
+    headerHTML += `<th class="col-header team-b-color" title="${teamBPlayers[j].faction}">${teamBPlayers[j].faction}</th>`;
   }
   headerHTML += '</tr>';
   thead.innerHTML = headerHTML;
 
-  // Body rows: Team A player row header + 8 input cells
+  // Body rows: Team A faction row header + 8 input cells
   let bodyHTML = '';
   for (let i = 0; i < 8; i++) {
     bodyHTML += `<tr>`;
-    bodyHTML += `<th class="row-header team-a-color" title="${teamAPlayers[i].name} — ${teamAPlayers[i].faction}">${teamAPlayers[i].name}<br><small>${teamAPlayers[i].faction}</small></th>`;
+    bodyHTML += `<th class="row-header team-a-color" title="${teamAPlayers[i].faction}">${teamAPlayers[i].faction}</th>`;
     for (let j = 0; j < 8; j++) {
       const key = `a${i}_b${j}`;
       const val = matchupScores[key] !== undefined ? matchupScores[key] : '';
@@ -208,12 +207,12 @@ function buildMatrixReference() {
       <thead><tr><th></th>`;
 
   teamBData.forEach(p => {
-    html += `<th class="col-header team-b-color">${p.name}<br><small>${p.faction}</small></th>`;
+    html += `<th class="col-header team-b-color">${p.faction}</th>`;
   });
   html += '</tr></thead><tbody>';
 
   teamAData.forEach((pA, i) => {
-    html += `<tr><th class="row-header team-a-color">${pA.name}<br><small>${pA.faction}</small></th>`;
+    html += `<tr><th class="row-header team-a-color">${pA.faction}</th>`;
     teamBData.forEach((pB, j) => {
       const key = `a${i}_b${j}`;
       const val = matchupScores[key];
