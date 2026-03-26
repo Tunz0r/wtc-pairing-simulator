@@ -8,6 +8,7 @@ let teamBData = [];
 let tablesData = [];
 let roundDeployment = '';
 let roundMission = '';
+let matchupScores = {}; // keyed by "a{i}_b{j}" → score (0–20)
 
 // --- Initialization ---
 
@@ -18,6 +19,12 @@ function init() {
   bindNavigation();
   bindPhaseActions();
   initMapTooltip();
+  buildMatrix();
+
+  // Rebuild matrix headers when names/factions change
+  document.querySelectorAll('.player-name, .player-faction').forEach(input => {
+    input.addEventListener('change', () => buildMatrix());
+  });
 }
 
 // --- Player Input Setup ---
@@ -104,6 +111,121 @@ function fillDummyTeams() {
 
   document.getElementById('team-a-name').value = 'Waaagh Warriors';
   document.getElementById('team-b-name').value = 'Hive Fleet Sigma';
+
+  buildMatrix();
+}
+
+// --- Matchup Matrix ---
+
+function buildMatrix() {
+  const thead = document.getElementById('matrix-thead');
+  const tbody = document.getElementById('matrix-tbody');
+
+  // Read current names/factions from inputs
+  const teamAPlayers = [];
+  const teamBPlayers = [];
+  for (let i = 0; i < 8; i++) {
+    teamAPlayers.push({
+      name: document.getElementById(`a-name-${i}`).value.trim() || `A-Player ${i + 1}`,
+      faction: document.getElementById(`a-faction-${i}`).value.trim() || '?',
+    });
+    teamBPlayers.push({
+      name: document.getElementById(`b-name-${i}`).value.trim() || `B-Player ${i + 1}`,
+      faction: document.getElementById(`b-faction-${i}`).value.trim() || '?',
+    });
+  }
+
+  // Header row: empty corner + Team B player columns
+  let headerHTML = '<tr><th class="matrix-corner"></th>';
+  for (let j = 0; j < 8; j++) {
+    const label = teamBPlayers[j].name + (teamBPlayers[j].faction !== '?' ? `\n${teamBPlayers[j].faction}` : '');
+    headerHTML += `<th class="col-header team-b-color" title="${teamBPlayers[j].name} — ${teamBPlayers[j].faction}">${teamBPlayers[j].name}<br><small>${teamBPlayers[j].faction}</small></th>`;
+  }
+  headerHTML += '</tr>';
+  thead.innerHTML = headerHTML;
+
+  // Body rows: Team A player row header + 8 input cells
+  let bodyHTML = '';
+  for (let i = 0; i < 8; i++) {
+    bodyHTML += `<tr>`;
+    bodyHTML += `<th class="row-header team-a-color" title="${teamAPlayers[i].name} — ${teamAPlayers[i].faction}">${teamAPlayers[i].name}<br><small>${teamAPlayers[i].faction}</small></th>`;
+    for (let j = 0; j < 8; j++) {
+      const key = `a${i}_b${j}`;
+      const val = matchupScores[key] !== undefined ? matchupScores[key] : '';
+      const cls = getMatrixCellClass(val);
+      bodyHTML += `<td class="${cls}"><input type="number" class="matrix-input" data-key="${key}" min="0" max="20" value="${val}" placeholder="—"></td>`;
+    }
+    bodyHTML += '</tr>';
+  }
+  tbody.innerHTML = bodyHTML;
+
+  // Listen for changes
+  tbody.querySelectorAll('.matrix-input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      let val = e.target.value.trim();
+      const key = e.target.dataset.key;
+      if (val === '') {
+        delete matchupScores[key];
+        e.target.closest('td').className = 'matrix-cell-empty';
+      } else {
+        val = Math.max(0, Math.min(20, parseInt(val) || 0));
+        e.target.value = val;
+        matchupScores[key] = val;
+        e.target.closest('td').className = getMatrixCellClass(val);
+      }
+    });
+  });
+}
+
+function getMatrixCellClass(val) {
+  if (val === '' || val === undefined || val === null) return 'matrix-cell-empty';
+  const v = parseInt(val);
+  if (isNaN(v)) return 'matrix-cell-empty';
+  if (v <= 2) return 'matrix-cell-brown';
+  if (v <= 7) return 'matrix-cell-red';
+  if (v <= 12) return 'matrix-cell-yellow';
+  if (v <= 17) return 'matrix-cell-green';
+  return 'matrix-cell-blue';
+}
+
+function buildMatrixReference() {
+  const body = document.getElementById('matrix-ref-body');
+  if (!teamAData.length || !teamBData.length) {
+    body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">No team data yet.</p>';
+    return;
+  }
+
+  // Build a read-only version of the matrix
+  let html = `
+    <div class="matrix-legend">
+      <span class="legend-item legend-brown">0–2</span>
+      <span class="legend-item legend-red">3–7</span>
+      <span class="legend-item legend-yellow">8–12</span>
+      <span class="legend-item legend-green">13–17</span>
+      <span class="legend-item legend-blue">18–20</span>
+    </div>
+    <table class="matchup-matrix">
+      <thead><tr><th></th>`;
+
+  teamBData.forEach(p => {
+    html += `<th class="col-header team-b-color">${p.name}<br><small>${p.faction}</small></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  teamAData.forEach((pA, i) => {
+    html += `<tr><th class="row-header team-a-color">${pA.name}<br><small>${pA.faction}</small></th>`;
+    teamBData.forEach((pB, j) => {
+      const key = `a${i}_b${j}`;
+      const val = matchupScores[key];
+      const cls = getMatrixCellClass(val);
+      const display = val !== undefined ? val : '—';
+      html += `<td class="${cls}" style="font-weight:700">${display}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  body.innerHTML = html;
 }
 
 // --- Round Config (Deployment + Mission) ---
@@ -270,6 +392,7 @@ function startPairing() {
   document.getElementById('board-team-b-name').textContent =
     document.getElementById('team-b-name').value || 'Team B';
 
+  buildMatrixReference();
   renderPairingState();
 }
 
