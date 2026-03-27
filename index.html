@@ -17,10 +17,11 @@
 
     <nav id="phase-nav">
       <button class="phase-btn active" data-phase="myteam">1. My Team</button>
-      <button class="phase-btn" data-phase="prep">2. Prep</button>
-      <button class="phase-btn" data-phase="round">3. Play Round</button>
-      <button class="phase-btn" data-phase="coaching">4. Live Coaching</button>
-      <button class="phase-btn" data-phase="overview">5. Overview</button>
+      <button class="phase-btn" data-phase="tableprefs">2. Tables</button>
+      <button class="phase-btn" data-phase="prep">3. Prep</button>
+      <button class="phase-btn" data-phase="round">4. Play Round</button>
+      <button class="phase-btn" data-phase="coaching">5. Live Coaching</button>
+      <button class="phase-btn" data-phase="overview">6. Overview</button>
     </nav>
 
     <!-- TAB 1: My Team -->
@@ -36,7 +37,51 @@
       </div>
     </section>
 
-    <!-- TAB 2: Prep -->
+    <!-- TAB 2: Table Preferences -->
+    <section id="phase-tableprefs" class="phase">
+      <h2 class="tp-tab-title">Table Preferences</h2>
+      <p class="phase-desc">Rate how each table suits your armies. Tags and preferences auto-import into rounds with matching deployment.</p>
+
+      <div class="round-config-section">
+        <div class="round-config">
+          <div class="round-config-row" style="grid-template-columns:1fr auto">
+            <div class="config-field">
+              <label>Deployment Zone</label>
+              <select id="tp-deployment">
+                <option value="">— Select Deployment —</option>
+              </select>
+            </div>
+            <div class="config-field config-field-btn">
+              <label>&nbsp;</label>
+              <button class="btn btn-secondary" id="btn-save-tableprefs">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table cards with tags -->
+      <div id="tp-tables-area" style="display:none">
+        <div class="tp-tables-section">
+          <h3>Table Tags</h3>
+          <p class="phase-desc" style="margin-bottom:12px">Tag tables to quickly identify terrain characteristics.</p>
+          <div class="tp-tags-grid" id="tp-tags-grid"></div>
+        </div>
+
+        <!-- Army preferences grid -->
+        <div class="tp-army-section">
+          <h3>Army Table Preferences</h3>
+          <p class="phase-desc" style="margin-bottom:12px">Rate each table for your armies. Green = good, Red = bad. These auto-fill matchup table prefs in Prep and Play Round.</p>
+          <div class="tp-army-grid-wrap">
+            <table class="tp-army-grid" id="tp-army-grid">
+              <thead id="tp-army-grid-head"></thead>
+              <tbody id="tp-army-grid-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Prep -->
     <section id="phase-prep" class="phase">
       <div class="prep-header">
         <h2>Opponent Prep</h2>

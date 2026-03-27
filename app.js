@@ -8,7 +8,9 @@ const STORAGE_KEY = 'wtc_pairing_app';
 let appState = {
   myTeam: { name: '', players: Array.from({ length: 8 }, () => ({ faction: '', armyList: '' })) },
   opponents: {},       // { countryName: { players: [...], matchups: {}, tablePrefs: {} } }
-  rounds: Array(7).fill(null), // each: { opponent, deployment, mission, matchups, tablePrefs, matches, log, completed }
+  rounds: Array(7).fill(null),
+  tableTags: {},       // { deployment: { tableIdx: ['shooting', 'melee', ...] } }
+  armyTablePrefs: {},  // { deployment: { faction: { tableIdx: 'good'|'bad' } } }
 };
 
 let engine = null;
@@ -29,6 +31,7 @@ let roundMatchupTablePrefs = {};
 function init() {
   loadState();
   buildMyTeamInputs();
+  buildTablePrefsUI();
   buildPrepUI();
   buildRoundUI();
   initCoaching();
@@ -45,6 +48,8 @@ function loadState() {
       appState = { ...appState, ...saved };
       if (!appState.rounds) appState.rounds = Array(7).fill(null);
       while (appState.rounds.length < 7) appState.rounds.push(null);
+      if (!appState.tableTags) appState.tableTags = {};
+      if (!appState.armyTablePrefs) appState.armyTablePrefs = {};
     }
   } catch (e) { console.warn('Failed to load state', e); }
 }
@@ -116,7 +121,201 @@ function fillDummyMyTeam() {
 }
 
 // ===========================
-// TAB 2: Prep
+// TAB 2: Table Preferences
+// ===========================
+
+const TABLE_TAG_OPTIONS = [
+  { id: 'shooting', label: 'Shooting', icon: '🎯', color: '#42a5f5' },
+  { id: 'melee', label: 'Melee Staging', icon: '⚔️', color: '#ef5350' },
+  { id: 'los_heavy', label: 'Heavy LoS Block', icon: '🧱', color: '#8d6e63' },
+  { id: 'los_light', label: 'Light LoS Block', icon: '🔍', color: '#ffca28' },
+  { id: 'open', label: 'Open', icon: '🏜️', color: '#ffa726' },
+  { id: 'dense', label: 'Dense', icon: '🌲', color: '#66bb6a' },
+  { id: 'ruins', label: 'Ruin Heavy', icon: '🏚️', color: '#78909c' },
+  { id: 'symmetric', label: 'Symmetric', icon: '⚖️', color: '#ab47bc' },
+];
+
+function buildTablePrefsUI() {
+  const depSel = document.getElementById('tp-deployment');
+  depSel.innerHTML = `
+    <option value="">— Select Deployment —</option>
+    ${WTC_DEPLOYMENTS.map(d => `<option value="${d}">${d}</option>`).join('')}
+    <optgroup label="BETA">
+      ${WTC_DEPLOYMENTS_BETA.map(d => `<option value="${d}">${d} (BETA)</option>`).join('')}
+    </optgroup>
+  `;
+
+  depSel.addEventListener('change', renderTablePrefsTab);
+  document.getElementById('btn-save-tableprefs').addEventListener('click', () => {
+    saveState();
+    showToast('Table preferences saved!');
+  });
+}
+
+function renderTablePrefsTab() {
+  const dep = document.getElementById('tp-deployment').value;
+  const area = document.getElementById('tp-tables-area');
+
+  if (!dep) {
+    area.style.display = 'none';
+    return;
+  }
+  area.style.display = '';
+
+  const maps = WTC_MAPS[dep];
+  if (!appState.tableTags[dep]) appState.tableTags[dep] = {};
+  if (!appState.armyTablePrefs[dep]) appState.armyTablePrefs[dep] = {};
+
+  // Render tag cards
+  renderTableTagsGrid(dep, maps);
+  // Render army prefs grid
+  renderArmyPrefsGrid(dep, maps);
+}
+
+function renderTableTagsGrid(dep, maps) {
+  const grid = document.getElementById('tp-tags-grid');
+  const tags = appState.tableTags[dep];
+
+  let html = '';
+  for (let t = 0; t < 8; t++) {
+    const mapIdx = WTC_TABLE_MAP_INDICES[t];
+    const map = maps ? maps[mapIdx] : null;
+    const mapName = map ? map.name : `Table ${t + 1}`;
+    const mapId = map ? map.id : null;
+    const activeTags = tags[t] || [];
+
+    html += `
+      <div class="tp-tag-card">
+        <div class="tp-tag-card-header">
+          <strong>T${t + 1}</strong>
+          <span class="tp-tag-map">${mapId ? mapNameHTML(mapId, mapName) : mapName}</span>
+        </div>
+        <div class="tp-tag-buttons" data-table="${t}">
+          ${TABLE_TAG_OPTIONS.map(tag => {
+            const active = activeTags.includes(tag.id);
+            return `<button class="tp-tag-btn ${active ? 'active' : ''}" data-tag="${tag.id}" data-table="${t}" style="--tag-color:${tag.color}" title="${tag.label}">${tag.icon} ${tag.label}</button>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+  grid.innerHTML = html;
+
+  // Bind tag toggle
+  grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tp-tag-btn');
+    if (!btn) return;
+    const t = parseInt(btn.dataset.table);
+    const tagId = btn.dataset.tag;
+    if (!tags[t]) tags[t] = [];
+    const idx = tags[t].indexOf(tagId);
+    if (idx >= 0) { tags[t].splice(idx, 1); btn.classList.remove('active'); }
+    else { tags[t].push(tagId); btn.classList.add('active'); }
+  });
+}
+
+function renderArmyPrefsGrid(dep, maps) {
+  const thead = document.getElementById('tp-army-grid-head');
+  const tbody = document.getElementById('tp-army-grid-body');
+  const prefs = appState.armyTablePrefs[dep];
+  const tags = appState.tableTags[dep] || {};
+
+  collectMyTeam();
+  const armies = appState.myTeam.players.filter(p => p.faction).map(p => p.faction);
+  if (armies.length === 0) {
+    thead.innerHTML = '';
+    tbody.innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text-muted)">Enter your team\'s armies in the My Team tab first.</td></tr>';
+    return;
+  }
+
+  // Header: Army | T1 | T2 | ... | T8
+  let headerHTML = '<tr><th class="tp-grid-army-header">Army</th>';
+  for (let t = 0; t < 8; t++) {
+    const mapIdx = WTC_TABLE_MAP_INDICES[t];
+    const map = maps ? maps[mapIdx] : null;
+    const mapName = map ? map.name : `T${t + 1}`;
+    const mapId = map ? map.id : null;
+    const tableTags = tags[t] || [];
+    const tagIcons = tableTags.map(tid => {
+      const to = TABLE_TAG_OPTIONS.find(x => x.id === tid);
+      return to ? `<span title="${to.label}" style="font-size:0.7rem">${to.icon}</span>` : '';
+    }).join(' ');
+
+    headerHTML += `<th class="tp-grid-table-header">
+      <div>T${t + 1}</div>
+      <div class="tp-grid-map-name">${mapId ? mapNameHTML(mapId, mapName) : mapName}</div>
+      ${tagIcons ? `<div class="tp-grid-tags">${tagIcons}</div>` : ''}
+    </th>`;
+  }
+  headerHTML += '</tr>';
+  thead.innerHTML = headerHTML;
+
+  // Body: one row per army
+  let bodyHTML = '';
+  armies.forEach(faction => {
+    if (!prefs[faction]) prefs[faction] = {};
+    const armyPref = prefs[faction];
+    bodyHTML += `<tr><td class="tp-grid-army-name team-a-color">${escHTML(faction)}</td>`;
+    for (let t = 0; t < 8; t++) {
+      const val = armyPref[t] || 'neutral';
+      const cls = val === 'good' ? 'tp-cell-good' : val === 'bad' ? 'tp-cell-bad' : 'tp-cell-neutral';
+      const display = val === 'good' ? '▲' : val === 'bad' ? '▼' : '—';
+      bodyHTML += `<td class="tp-grid-cell ${cls}" data-faction="${escHTML(faction)}" data-table="${t}" title="${val}">${display}</td>`;
+    }
+    bodyHTML += '</tr>';
+  });
+  tbody.innerHTML = bodyHTML;
+
+  // Click to cycle: neutral → good → bad → neutral
+  tbody.addEventListener('click', (e) => {
+    const td = e.target.closest('.tp-grid-cell');
+    if (!td) return;
+    const faction = td.dataset.faction;
+    const t = parseInt(td.dataset.table);
+    if (!prefs[faction]) prefs[faction] = {};
+    const current = prefs[faction][t] || 'neutral';
+    const next = current === 'neutral' ? 'good' : current === 'good' ? 'bad' : 'neutral';
+    if (next === 'neutral') delete prefs[faction][t];
+    else prefs[faction][t] = next;
+
+    td.className = 'tp-grid-cell ' + (next === 'good' ? 'tp-cell-good' : next === 'bad' ? 'tp-cell-bad' : 'tp-cell-neutral');
+    td.textContent = next === 'good' ? '▲' : next === 'bad' ? '▼' : '—';
+    td.title = next;
+  });
+}
+
+/**
+ * Auto-apply army-level table prefs to matchup-level table prefs.
+ * For a matchup (my army i vs opp army j), if my army has a pref for table T,
+ * that becomes the matchup table pref (unless already manually overridden).
+ */
+function applyArmyTablePrefsToMatchups(deployment, myPlayers, oppPlayers, matchupTablePrefs, context) {
+  const armyPrefs = appState.armyTablePrefs[deployment];
+  if (!armyPrefs) return;
+
+  for (let i = 0; i < 8; i++) {
+    const myFaction = myPlayers[i]?.faction;
+    if (!myFaction || !armyPrefs[myFaction]) continue;
+
+    for (let j = 0; j < 8; j++) {
+      const key = context === 'prep' ? `${i}_${j}` : `a${i}_b${j}`;
+      // Only auto-fill if no manual pref exists for this matchup
+      if (matchupTablePrefs[key] && Object.keys(matchupTablePrefs[key]).length > 0) continue;
+
+      const armyPref = armyPrefs[myFaction];
+      const hasPrefs = Object.keys(armyPref).some(t => armyPref[t]);
+      if (hasPrefs) {
+        matchupTablePrefs[key] = {};
+        Object.entries(armyPref).forEach(([t, val]) => {
+          matchupTablePrefs[key][parseInt(t)] = val;
+        });
+      }
+    }
+  }
+}
+
+// ===========================
+// TAB 3: Prep
 // ===========================
 
 function buildPrepUI() {
@@ -307,12 +506,19 @@ function fillDummyPrepMatrix() {
 function renderPrepMatrix() {
   if (!currentPrepCountry) return;
   const opp = appState.opponents[currentPrepCountry];
+  const dep = document.getElementById('prep-deployment').value;
   selectedMatrixCell = null;
+
+  // Auto-apply army-level table prefs
+  if (dep) {
+    applyArmyTablePrefsToMatchups(dep, appState.myTeam.players, opp.players, opp.tablePrefs, 'prep');
+  }
+
   buildMatrixDOM(
     'matrix-thead', 'matrix-tbody', 'table-prefs-panel',
     appState.myTeam.players, opp.players,
     opp.matchups, opp.tablePrefs,
-    document.getElementById('prep-deployment').value,
+    dep,
     'prep'
   );
 }
@@ -449,6 +655,7 @@ function updateRoundButtons() {
 function loadPrepIntoRound() {
   const oppName = document.getElementById('round-opponent').value;
   if (!oppName || !appState.opponents[oppName]) return;
+  const dep = document.getElementById('round-deployment').value;
 
   const opp = appState.opponents[oppName];
   roundMatchupScores = {};
@@ -465,7 +672,14 @@ function loadPrepIntoRound() {
     roundMatchupTablePrefs[aKey] = { ...val };
   });
 
+  // Auto-apply army-level table prefs for this deployment
+  if (dep) {
+    collectMyTeam();
+    applyArmyTablePrefsToMatchups(dep, appState.myTeam.players, opp.players, roundMatchupTablePrefs, 'round');
+  }
+
   buildRoundMatrix();
+  showToast('Matrix loaded from prep' + (dep ? ' + army table prefs applied' : ''));
 }
 
 function buildRoundMatrix() {
@@ -1812,6 +2026,7 @@ function showPhase(name) {
   document.querySelector(`[data-phase="${name}"]`).classList.add('active');
 
   // Refresh content when switching tabs
+  if (name === 'tableprefs') renderTablePrefsTab();
   if (name === 'prep') { populateCountryDropdown(); if (currentPrepCountry) renderPrepMatrix(); }
   if (name === 'round') { populateRoundOpponents(); buildRoundMatrix(); updateTablesPreview(); }
   if (name === 'coaching') { populateCoachingRoundSelect(); renderCoachingTab(); }

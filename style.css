@@ -1587,6 +1587,187 @@ details[open] .matrix-ref-toggle::before {
 }
 
 /* ===========================
+   Table Preferences Tab
+   =========================== */
+
+.tp-tab-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.3rem;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.tp-tables-section,
+.tp-army-section {
+  margin-top: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.tp-tables-section h3,
+.tp-army-section h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+/* Tag cards grid */
+.tp-tags-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.tp-tag-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.tp-tag-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tp-tag-card-header strong {
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.tp-tag-map {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.tp-tag-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tp-tag-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'Inter', sans-serif;
+}
+
+.tp-tag-btn:hover {
+  border-color: var(--tag-color, var(--accent));
+  color: var(--text-primary);
+}
+
+.tp-tag-btn.active {
+  background: color-mix(in srgb, var(--tag-color, var(--accent)) 20%, transparent);
+  border-color: var(--tag-color, var(--accent));
+  color: var(--tag-color, var(--accent));
+  font-weight: 600;
+}
+
+/* Army preferences grid */
+.tp-army-grid-wrap {
+  overflow-x: auto;
+}
+
+.tp-army-grid {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+
+.tp-army-grid th,
+.tp-army-grid td {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.tp-grid-army-header {
+  text-align: left !important;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  width: 160px;
+  min-width: 140px;
+}
+
+.tp-grid-table-header {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  min-width: 80px;
+}
+
+.tp-grid-table-header div:first-child {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.tp-grid-map-name {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.tp-grid-tags {
+  margin-top: 2px;
+  line-height: 1;
+}
+
+.tp-grid-army-name {
+  text-align: left !important;
+  font-weight: 600;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.tp-grid-cell {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  transition: all 0.1s;
+  user-select: none;
+}
+
+.tp-grid-cell:hover {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tp-cell-neutral {
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+
+.tp-cell-good {
+  color: #43a047;
+  background: rgba(67, 160, 71, 0.1);
+}
+
+.tp-cell-bad {
+  color: #e53935;
+  background: rgba(229, 57, 53, 0.1);
+}
+
+/* ===========================
    Live Coaching Tab
    =========================== */
 
