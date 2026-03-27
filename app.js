@@ -31,6 +31,7 @@ function init() {
   buildMyTeamInputs();
   buildPrepUI();
   buildRoundUI();
+  initCoaching();
   bindNavigation();
   initMapTooltip();
   renderOverview();
@@ -1101,7 +1102,387 @@ function buildMatrixReference() {
 }
 
 // ===========================
-// TAB 4: Overview
+// TAB 4: Live Coaching
+// ===========================
+
+const COACHING_STORAGE_KEY = 'wtc_coaching_live';
+let coachingChannel = null;
+
+function initCoaching() {
+  populateCoachingRoundSelect();
+  document.getElementById('coaching-round-select').addEventListener('change', renderCoachingTab);
+  document.getElementById('btn-share-coaching').addEventListener('click', shareCoachingState);
+  document.getElementById('btn-import-coaching').addEventListener('click', showImportModal);
+
+  // BroadcastChannel for multi-tab sync
+  try {
+    coachingChannel = new BroadcastChannel('wtc_coaching_sync');
+    coachingChannel.onmessage = (e) => {
+      if (e.data.type === 'coaching_update') {
+        saveCoachingData(e.data.roundIdx, e.data.scores, false); // save without re-broadcasting
+        const sel = document.getElementById('coaching-round-select');
+        if (parseInt(sel.value) === e.data.roundIdx) {
+          renderCoachingTab(); // refresh if viewing same round
+        }
+      }
+    };
+  } catch (e) { /* BroadcastChannel not supported */ }
+}
+
+function populateCoachingRoundSelect() {
+  const sel = document.getElementById('coaching-round-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Select Round —</option>';
+  for (let r = 0; r < 7; r++) {
+    const rd = appState.rounds[r];
+    if (rd && rd.completed) {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = `Round ${r + 1} vs ${rd.opponent || '?'}`;
+      sel.appendChild(opt);
+    }
+  }
+  if (current) sel.value = current;
+}
+
+function getCoachingData(roundIdx) {
+  try {
+    const raw = localStorage.getItem(COACHING_STORAGE_KEY);
+    if (raw) {
+      const all = JSON.parse(raw);
+      return all[roundIdx] || null;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveCoachingData(roundIdx, scores, broadcast = true) {
+  try {
+    const raw = localStorage.getItem(COACHING_STORAGE_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    all[roundIdx] = scores;
+    localStorage.setItem(COACHING_STORAGE_KEY, JSON.stringify(all));
+    if (broadcast && coachingChannel) {
+      coachingChannel.postMessage({ type: 'coaching_update', roundIdx, scores });
+    }
+  } catch (e) { console.warn('Failed to save coaching data', e); }
+}
+
+function renderCoachingTab() {
+  const sel = document.getElementById('coaching-round-select');
+  const content = document.getElementById('coaching-content');
+  const roundIdx = sel.value;
+
+  if (roundIdx === '' || !appState.rounds[parseInt(roundIdx)]) {
+    content.innerHTML = '<p class="coaching-placeholder">Select a completed round to start coaching.</p>';
+    return;
+  }
+
+  const rIdx = parseInt(roundIdx);
+  const rd = appState.rounds[rIdx];
+  const saved = getCoachingData(rIdx) || {};
+  const matches = rd.matches || [];
+
+  let html = `
+    <div class="coaching-table-wrap">
+      <table class="coaching-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Matchup</th>
+            <th>Table</th>
+            <th class="est-col">Est.</th>
+            <th class="br-col">BR 1</th>
+            <th class="br-col">BR 2</th>
+            <th class="br-col">BR 3</th>
+            <th class="br-col">BR 4</th>
+            <th class="br-col">BR 5</th>
+            <th>Latest</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  matches.forEach((m, idx) => {
+    const mScores = saved[idx] || {};
+    const estKey = `a${matches.indexOf(m)}_b${matches.indexOf(m)}`;
+    // Try to get pre-match estimate from round matrix data
+    let preEst = '—';
+    // Find the original indices
+    const aIdx = m.playerA ? parseInt(m.playerA.replace('a','')) : idx;
+    const bIdx = m.playerB ? parseInt(m.playerB.replace('b','')) : idx;
+    const matrixKey = `a${aIdx}_b${bIdx}`;
+    if (roundMatchupScores[matrixKey] !== undefined) {
+      preEst = roundMatchupScores[matrixKey];
+    } else if (rd.opponent && appState.opponents[rd.opponent]) {
+      const oppData = appState.opponents[rd.opponent];
+      const prepKey = `${aIdx}_${bIdx}`;
+      if (oppData.matchups[prepKey]) preEst = oppData.matchups[prepKey].score;
+    }
+
+    // Calculate latest
+    let latest = preEst;
+    for (let br = 5; br >= 1; br--) {
+      if (mScores[br] !== undefined && mScores[br] !== '') {
+        latest = mScores[br];
+        break;
+      }
+    }
+
+    const latestNum = parseInt(latest);
+    const latestCls = getMatrixCellClass(latestNum);
+
+    const tableNum = m.table !== null && m.table !== undefined ? `T${m.table + 1}` : '—';
+
+    html += `
+      <tr>
+        <td>${idx + 1}</td>
+        <td class="match-cell">
+          <span class="coaching-match-a">${escHTML(m.factionA || '?')}</span>
+          <span class="coaching-match-vs">vs</span>
+          <span class="coaching-match-b">${escHTML(m.factionB || '?')}</span>
+        </td>
+        <td class="table-cell">${tableNum}</td>
+        <td class="est-cell ${getMatrixCellClass(preEst)}">${preEst}</td>
+    `;
+
+    for (let br = 1; br <= 5; br++) {
+      const val = mScores[br] !== undefined ? mScores[br] : '';
+      html += `<td><input type="number" class="coaching-br-input" data-match="${idx}" data-br="${br}" min="0" max="20" value="${val}" placeholder="—"></td>`;
+    }
+
+    html += `<td class="coaching-latest ${latestCls}">${latest}</td></tr>`;
+  });
+
+  // Total row
+  html += `
+      <tr class="total-row">
+        <td colspan="3" class="total-label">TEAM TOTAL</td>
+        <td class="est-cell" id="coaching-total-est">—</td>
+        <td id="coaching-total-br1">—</td>
+        <td id="coaching-total-br2">—</td>
+        <td id="coaching-total-br3">—</td>
+        <td id="coaching-total-br4">—</td>
+        <td id="coaching-total-br5">—</td>
+        <td id="coaching-total-latest">—</td>
+      </tr>
+    </tbody></table></div>
+  `;
+
+  content.innerHTML = html;
+
+  // Bind input handlers
+  content.querySelectorAll('.coaching-br-input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      let val = e.target.value.trim();
+      const matchIdx = parseInt(e.target.dataset.match);
+      const br = parseInt(e.target.dataset.br);
+
+      const currentSaved = getCoachingData(rIdx) || {};
+      if (!currentSaved[matchIdx]) currentSaved[matchIdx] = {};
+
+      if (val === '') {
+        delete currentSaved[matchIdx][br];
+      } else {
+        val = Math.max(0, Math.min(20, parseInt(val) || 0));
+        e.target.value = val;
+        currentSaved[matchIdx][br] = val;
+      }
+
+      saveCoachingData(rIdx, currentSaved);
+      updateCoachingTotals(rIdx);
+    });
+  });
+
+  updateCoachingTotals(rIdx);
+}
+
+function updateCoachingTotals(roundIdx) {
+  const rd = appState.rounds[roundIdx];
+  if (!rd) return;
+  const matches = rd.matches || [];
+  const saved = getCoachingData(roundIdx) || {};
+
+  let estTotal = 0, estCount = 0;
+  const brTotals = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const brCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let latestTotal = 0;
+
+  matches.forEach((m, idx) => {
+    const mScores = saved[idx] || {};
+    const aIdx = m.playerA ? parseInt(m.playerA.replace('a','')) : idx;
+    const bIdx = m.playerB ? parseInt(m.playerB.replace('b','')) : idx;
+
+    // Pre-match estimate
+    let preEst = null;
+    const matrixKey = `a${aIdx}_b${bIdx}`;
+    if (roundMatchupScores[matrixKey] !== undefined) {
+      preEst = roundMatchupScores[matrixKey];
+    } else if (rd.opponent && appState.opponents[rd.opponent]) {
+      const oppData = appState.opponents[rd.opponent];
+      const prepKey = `${aIdx}_${bIdx}`;
+      if (oppData.matchups[prepKey]) preEst = oppData.matchups[prepKey].score;
+    }
+
+    if (preEst !== null && preEst !== '—') { estTotal += parseInt(preEst); estCount++; }
+
+    // BR totals
+    for (let br = 1; br <= 5; br++) {
+      if (mScores[br] !== undefined && mScores[br] !== '') {
+        brTotals[br] += parseInt(mScores[br]);
+        brCounts[br]++;
+      }
+    }
+
+    // Latest per match
+    let latest = preEst;
+    for (let br = 5; br >= 1; br--) {
+      if (mScores[br] !== undefined && mScores[br] !== '') { latest = mScores[br]; break; }
+    }
+    if (latest !== null && latest !== '—') latestTotal += parseInt(latest);
+  });
+
+  // Update DOM
+  const estEl = document.getElementById('coaching-total-est');
+  if (estEl) estEl.textContent = estCount > 0 ? estTotal : '—';
+
+  for (let br = 1; br <= 5; br++) {
+    const el = document.getElementById(`coaching-total-br${br}`);
+    if (el) {
+      if (brCounts[br] === 8) {
+        el.textContent = brTotals[br];
+        el.className = brTotals[br] >= 88 ? 'coaching-good' : brTotals[br] >= 72 ? 'coaching-neutral' : 'coaching-bad';
+      } else if (brCounts[br] > 0) {
+        el.textContent = `${brTotals[br]} (${brCounts[br]}/8)`;
+        el.className = '';
+      } else {
+        el.textContent = '—';
+        el.className = '';
+      }
+    }
+  }
+
+  const latestEl = document.getElementById('coaching-total-latest');
+  if (latestEl) {
+    latestEl.textContent = latestTotal;
+    latestEl.className = 'coaching-latest ' + (latestTotal >= 88 ? 'coaching-good' : latestTotal >= 72 ? '' : 'coaching-bad');
+  }
+
+  // Update latest column cells
+  const rd2 = appState.rounds[roundIdx];
+  const content = document.getElementById('coaching-content');
+  const rows = content.querySelectorAll('tbody tr:not(.total-row)');
+  rows.forEach((row, idx) => {
+    const mScores = saved[idx] || {};
+    const m = matches[idx];
+    const aIdx = m.playerA ? parseInt(m.playerA.replace('a','')) : idx;
+    const bIdx = m.playerB ? parseInt(m.playerB.replace('b','')) : idx;
+
+    let preEst = '—';
+    const matrixKey = `a${aIdx}_b${bIdx}`;
+    if (roundMatchupScores[matrixKey] !== undefined) preEst = roundMatchupScores[matrixKey];
+    else if (rd2.opponent && appState.opponents[rd2.opponent]) {
+      const oppData = appState.opponents[rd2.opponent];
+      const prepKey = `${aIdx}_${bIdx}`;
+      if (oppData.matchups[prepKey]) preEst = oppData.matchups[prepKey].score;
+    }
+
+    let latest = preEst;
+    for (let br = 5; br >= 1; br--) {
+      if (mScores[br] !== undefined && mScores[br] !== '') { latest = mScores[br]; break; }
+    }
+
+    const latestCell = row.querySelector('.coaching-latest');
+    if (latestCell) {
+      latestCell.textContent = latest;
+      latestCell.className = 'coaching-latest ' + getMatrixCellClass(parseInt(latest));
+    }
+  });
+}
+
+function shareCoachingState() {
+  const sel = document.getElementById('coaching-round-select');
+  const roundIdx = parseInt(sel.value);
+  if (isNaN(roundIdx)) { showToast('Select a round first.'); return; }
+
+  const rd = appState.rounds[roundIdx];
+  const scores = getCoachingData(roundIdx) || {};
+
+  const shareData = {
+    v: 1,
+    round: roundIdx,
+    opponent: rd.opponent,
+    matches: rd.matches,
+    scores: scores,
+  };
+
+  const encoded = btoa(JSON.stringify(shareData));
+  showShareModal(encoded, 'export');
+}
+
+function showImportModal() {
+  showShareModal('', 'import');
+}
+
+function showShareModal(code, mode) {
+  const modal = document.createElement('div');
+  modal.className = 'coaching-share-modal';
+  modal.innerHTML = `
+    <div class="coaching-share-content">
+      <h3>${mode === 'export' ? 'Share Coaching State' : 'Import Coaching State'}</h3>
+      <p style="color:var(--text-secondary);margin-bottom:12px;font-size:0.85rem;">
+        ${mode === 'export' ? 'Copy this code and share with other coaches:' : 'Paste a coaching state code from another coach:'}
+      </p>
+      <textarea id="share-code-area" ${mode === 'export' ? 'readonly' : ''} placeholder="Paste share code here...">${code}</textarea>
+      <div class="coaching-share-btns">
+        ${mode === 'export' ? '<button class="btn btn-accent" id="btn-copy-code">Copy</button>' : '<button class="btn btn-primary" id="btn-apply-import">Import</button>'}
+        <button class="btn btn-secondary" id="btn-close-modal">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#btn-close-modal').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  if (mode === 'export') {
+    modal.querySelector('#btn-copy-code').addEventListener('click', () => {
+      const textarea = modal.querySelector('#share-code-area');
+      textarea.select();
+      navigator.clipboard.writeText(textarea.value).then(() => showToast('Copied to clipboard!'));
+    });
+    // Auto-select
+    setTimeout(() => modal.querySelector('#share-code-area').select(), 100);
+  } else {
+    modal.querySelector('#btn-apply-import').addEventListener('click', () => {
+      const raw = modal.querySelector('#share-code-area').value.trim();
+      try {
+        const data = JSON.parse(atob(raw));
+        if (data.v !== 1 || data.round === undefined) throw new Error('Invalid format');
+        saveCoachingData(data.round, data.scores);
+        // Ensure the round data exists
+        if (data.matches && !appState.rounds[data.round]) {
+          appState.rounds[data.round] = {
+            opponent: data.opponent,
+            matches: data.matches,
+            completed: true,
+          };
+          saveState();
+        }
+        populateCoachingRoundSelect();
+        document.getElementById('coaching-round-select').value = data.round;
+        renderCoachingTab();
+        modal.remove();
+        showToast('Coaching state imported!');
+      } catch (e) {
+        showToast('Invalid share code. Check and try again.');
+      }
+    });
+  }
+}
+
+// ===========================
+// TAB 5: Overview
 // ===========================
 
 function renderOverview() {
@@ -1347,6 +1728,7 @@ function showPhase(name) {
   // Refresh content when switching tabs
   if (name === 'prep') { populateCountryDropdown(); if (currentPrepCountry) renderPrepMatrix(); }
   if (name === 'round') { populateRoundOpponents(); buildRoundMatrix(); updateTablesPreview(); }
+  if (name === 'coaching') { populateCoachingRoundSelect(); renderCoachingTab(); }
   if (name === 'overview') renderOverview();
 }
 

@@ -1528,6 +1528,206 @@ details[open] .matrix-ref-toggle::before {
   color: var(--accent);
 }
 
+/* ===========================
+   Live Coaching Tab
+   =========================== */
+
+.coaching-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.coaching-header h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+
+.coaching-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.coaching-controls select {
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+}
+
+.coaching-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+/* Coaching Table */
+.coaching-table-wrap {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.coaching-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 900px;
+}
+
+.coaching-table th,
+.coaching-table td {
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.coaching-table thead th {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.coaching-table thead th.br-col {
+  min-width: 60px;
+}
+
+.coaching-table .match-cell {
+  text-align: left;
+  padding: 6px 10px;
+  white-space: nowrap;
+  background: var(--bg-card);
+  min-width: 200px;
+}
+
+.coaching-match-a { color: var(--team-a); font-weight: 600; }
+.coaching-match-b { color: var(--team-b); font-weight: 600; }
+.coaching-match-vs { color: var(--text-muted); margin: 0 4px; }
+
+.coaching-table .est-cell {
+  background: var(--bg-card);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.coaching-table .table-cell {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+}
+
+/* Battle round score inputs */
+.coaching-br-input {
+  width: 48px;
+  padding: 6px 4px;
+  text-align: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.coaching-br-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--bg-dark);
+}
+
+.coaching-br-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Latest column */
+.coaching-latest {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* Total row */
+.coaching-table .total-row td {
+  background: var(--bg-surface);
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-top: 2px solid var(--accent);
+}
+
+.coaching-table .total-row .total-label {
+  text-align: right;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+/* Color coding for totals */
+.coaching-good { color: #43a047; }
+.coaching-neutral { color: var(--text-primary); }
+.coaching-bad { color: #e53935; }
+
+/* Share modal */
+.coaching-share-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coaching-share-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+}
+
+.coaching-share-content h3 {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.coaching-share-content textarea {
+  width: 100%;
+  height: 120px;
+  padding: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  resize: vertical;
+  margin-bottom: 12px;
+}
+
+.coaching-share-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-dark); }

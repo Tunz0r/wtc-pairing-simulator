@@ -19,7 +19,8 @@
       <button class="phase-btn active" data-phase="myteam">1. My Team</button>
       <button class="phase-btn" data-phase="prep">2. Prep</button>
       <button class="phase-btn" data-phase="round">3. Play Round</button>
-      <button class="phase-btn" data-phase="overview">4. Overview</button>
+      <button class="phase-btn" data-phase="coaching">4. Live Coaching</button>
+      <button class="phase-btn" data-phase="overview">5. Overview</button>
     </nav>
 
     <!-- TAB 1: My Team -->
@@ -234,7 +235,25 @@
       </div>
     </section>
 
-    <!-- TAB 4: Overview -->
+    <!-- TAB 4: Live Coaching -->
+    <section id="phase-coaching" class="phase">
+      <div class="coaching-header">
+        <h2>Live Coaching</h2>
+        <div class="coaching-controls">
+          <select id="coaching-round-select">
+            <option value="">— Select Round —</option>
+          </select>
+          <button class="btn btn-accent" id="btn-share-coaching" title="Copy share code">Share State</button>
+          <button class="btn btn-secondary" id="btn-import-coaching" title="Import shared state">Import</button>
+        </div>
+      </div>
+      <p class="phase-desc">Track live scores during games. Updates sync across browser tabs automatically.</p>
+      <div id="coaching-content">
+        <p class="coaching-placeholder">Select a completed round to start coaching, or begin a round from the Play Round tab.</p>
+      </div>
+    </section>
+
+    <!-- TAB 5: Overview -->
     <section id="phase-overview" class="phase">
       <h2>Tournament Overview</h2>
       <div id="overview-content"></div>
