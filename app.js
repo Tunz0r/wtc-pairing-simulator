@@ -83,6 +83,12 @@ function saveState() {
   if (typeof syncState === 'function') syncState();
 }
 
+let _debouncedSaveTimer = null;
+function debouncedSaveState() {
+  clearTimeout(_debouncedSaveTimer);
+  _debouncedSaveTimer = setTimeout(() => saveState(), 400);
+}
+
 // ===========================
 // TAB 1: My Team
 // ===========================
@@ -114,8 +120,8 @@ function buildMyTeamInputs() {
   ensureFactionDatalist();
 
   // Auto-save on change
-  container.addEventListener('input', () => collectMyTeam());
-  document.getElementById('my-team-name').addEventListener('input', () => collectMyTeam());
+  container.addEventListener('input', () => { collectMyTeam(); debouncedSaveState(); });
+  document.getElementById('my-team-name').addEventListener('input', () => { collectMyTeam(); debouncedSaveState(); });
 
   document.getElementById('btn-fill-my-team').addEventListener('click', () => {
     fillDummyMyTeam();
@@ -237,6 +243,7 @@ function renderTableTagsGrid(dep, maps) {
     const idx = tags[t].indexOf(tagId);
     if (idx >= 0) { tags[t].splice(idx, 1); btn.classList.remove('active'); }
     else { tags[t].push(tagId); btn.classList.add('active'); }
+    debouncedSaveState();
   });
 }
 
@@ -307,6 +314,7 @@ function renderArmyPrefsGrid(dep, maps) {
     td.className = 'tp-grid-cell ' + (next === 'good' ? 'tp-cell-good' : next === 'bad' ? 'tp-cell-bad' : 'tp-cell-neutral');
     td.textContent = next === 'good' ? '▲' : next === 'bad' ? '▼' : '—';
     td.title = next;
+    debouncedSaveState();
   });
 }
 
@@ -507,9 +515,10 @@ function buildOppTeamInputs() {
     const pos = arr.indexOf(flag);
     if (pos >= 0) { arr.splice(pos, 1); flagBtn.classList.remove('active'); }
     else { arr.push(flag); flagBtn.classList.add('active'); }
+    debouncedSaveState();
   });
 
-  container.addEventListener('input', () => collectPrepData());
+  container.addEventListener('input', () => { collectPrepData(); debouncedSaveState(); });
 }
 
 function collectPrepData() {
@@ -855,6 +864,7 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
         }
       }
       updateCellColor(e.target.closest('td'), val);
+      if (ctx === 'prep') debouncedSaveState();
     });
   });
 
@@ -878,6 +888,7 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
           roundMatchupVolatility[k] = val;
         }
       }
+      if (ctx === 'prep') debouncedSaveState();
     });
   });
 
@@ -962,6 +973,7 @@ function renderTablePrefsPanel(panelId, myPlayers, oppPlayers, tablePrefs, deplo
       const next = current === 'neutral' ? 'good' : current === 'good' ? 'bad' : 'neutral';
       if (next === 'neutral') { delete tablePrefs[k][t]; } else { tablePrefs[k][t] = next; }
       renderTablePrefsPanel(panelId, myPlayers, oppPlayers, tablePrefs, deployment, context);
+      debouncedSaveState();
     });
   });
 }
