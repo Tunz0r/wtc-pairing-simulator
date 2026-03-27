@@ -751,6 +751,7 @@ function renderPairingState() {
   renderPools(state);
   renderTableChoiceToken(state);
   renderActionPanel(prompt, state);
+  updateMatrixReference();
 
   // If complete, save round results
   if (state.isComplete) {
@@ -809,14 +810,34 @@ function renderMatches(state) {
     const pA = engine.getPlayer(match.playerA);
     const pB = engine.getPlayer(match.playerB);
     const tableInfo = match.table !== null ? tablesData[match.table] : null;
+
+    // Get matchup data
+    const ai = parseInt(match.playerA.replace('a',''));
+    const bi = parseInt(match.playerB.replace('b',''));
+    const key = `a${ai}_b${bi}`;
+    const est = roundMatchupScores[key];
+    const vol = roundMatchupVolatility[key];
+    const estCls = getMatrixCellClass(est);
+
+    // Table preference for this matchup
+    let tablePrefHTML = '';
+    if (tableInfo && match.table !== null) {
+      const tpKey = key;
+      const prefs = roundMatchupTablePrefs[tpKey] || {};
+      const tPref = prefs[match.table];
+      if (tPref === 'good') tablePrefHTML = '<span class="match-tp match-tp-good" title="Good table for us">▲</span>';
+      else if (tPref === 'bad') tablePrefHTML = '<span class="match-tp match-tp-bad" title="Bad table for us">▼</span>';
+    }
+
     const row = document.createElement('div');
     row.className = 'match-row';
     row.innerHTML = `
       <div class="match-player team-a-bg"><strong>${playerHTML(match.playerA, pA.faction)}</strong></div>
       <div class="match-info">
         <div class="match-number">#${idx + 1}</div>
+        ${est !== undefined ? `<div class="match-estimate ${estCls}">${est}${vol ? `<small class="match-vol">±${vol}</small>` : ''}</div>` : ''}
         ${tableInfo ? `
-          <div class="match-table">Table ${match.table + 1}</div>
+          <div class="match-table">Table ${match.table + 1} ${tablePrefHTML}</div>
           <div class="match-map">${mapNameHTML(tableInfo.mapId, tableInfo.map)}</div>
         ` : '<div class="match-table pending">Table TBD</div>'}
         <div class="match-type">${match.type.replace(/_/g, ' ')}</div>
@@ -1033,18 +1054,32 @@ function renderTableSelect(panel, prompt, state) {
     const matchNum = engine.matches.indexOf(currentMatch) + 1;
     const whoChooses = currentMatch.defenderTeam === prompt.firstTeam ? "Token holder's defender" : 'Other defender';
 
+    // Get table prefs for this matchup
+    const ai = parseInt(currentMatch.playerA.replace('a',''));
+    const bi = parseInt(currentMatch.playerB.replace('b',''));
+    const tpKey = `a${ai}_b${bi}`;
+    const matchPrefs = roundMatchupTablePrefs[tpKey] || {};
+    const estScore = roundMatchupScores[tpKey];
+    const vol = roundMatchupVolatility[tpKey];
+    const estHTML = estScore !== undefined ? `<span class="match-estimate-inline ${getMatrixCellClass(estScore)}">${estScore}${vol ? `<small class="match-vol">±${vol}</small>` : ''}</span>` : '';
+
     panel.innerHTML = `
       <div class="table-select-section">
-        <h3>Assign Table for Match #${matchNum}</h3>
+        <h3>Assign Table for Match #${matchNum} ${estHTML}</h3>
         <p class="match-preview">${playerHTML(currentMatch.playerA, pA.faction)} vs ${playerHTML(currentMatch.playerB, pB.faction)}</p>
         <p class="sel-hint">${whoChooses} chooses table</p>
         <div class="table-options" id="table-opts">
-          ${remainingTables.map(tIdx => `
-            <button class="table-btn" data-table="${tIdx}">
+          ${remainingTables.map(tIdx => {
+            const pref = matchPrefs[tIdx];
+            const prefCls = pref === 'good' ? 'table-btn-good' : pref === 'bad' ? 'table-btn-bad' : '';
+            const prefTag = pref === 'good' ? '<span class="table-pref-tag good">▲ Good</span>' : pref === 'bad' ? '<span class="table-pref-tag bad">▼ Bad</span>' : '';
+            return `
+            <button class="table-btn ${prefCls}" data-table="${tIdx}">
               <strong>Table ${tIdx + 1}</strong>
               <span>${mapNameHTML(tablesData[tIdx].mapId, tablesData[tIdx].map)}</span>
-            </button>
-          `).join('')}
+              ${prefTag}
+            </button>`;
+          }).join('')}
         </div>
       </div>
     `;
@@ -1072,8 +1107,27 @@ function renderComplete(panel, prompt) {
 // --- Matrix Reference ---
 
 function buildMatrixReference() {
+  updateMatrixReference();
+}
+
+function updateMatrixReference() {
   const body = document.getElementById('matrix-ref-body');
-  if (!teamAData.length || !teamBData.length) { body.innerHTML = '<p style="color:var(--text-muted)">No data.</p>'; return; }
+  if (!body || !teamAData.length || !teamBData.length) return;
+
+  const state = engine ? engine.getState() : null;
+  const pairedA = new Set(), pairedB = new Set();
+  const matchedPairs = new Set();
+  if (state) {
+    state.matches.forEach(m => {
+      pairedA.add(m.playerA);
+      pairedB.add(m.playerB);
+      const ai = parseInt(m.playerA.replace('a',''));
+      const bi = parseInt(m.playerB.replace('b',''));
+      matchedPairs.add(`${ai}_${bi}`);
+    });
+  }
+  const poolASet = state ? new Set(state.poolA) : new Set(teamAData.map(p => p.id));
+  const poolBSet = state ? new Set(state.poolB) : new Set(teamBData.map(p => p.id));
 
   let html = `<div class="matrix-legend">
     <span class="legend-item legend-brown">0-2</span>
@@ -1081,19 +1135,33 @@ function buildMatrixReference() {
     <span class="legend-item legend-yellow">8-12</span>
     <span class="legend-item legend-green">13-17</span>
     <span class="legend-item legend-blue">18-20</span>
-  </div><table class="matchup-matrix"><thead><tr><th></th>`;
+  </div><table class="matchup-matrix ref-live"><thead><tr><th></th>`;
 
-  teamBData.forEach(p => { html += `<th class="col-header team-b-color">${escHTML(p.faction)}</th>`; });
+  teamBData.forEach((p, j) => {
+    const dimmed = !poolBSet.has(p.id) && !pairedB.has(p.id) ? ' ref-dimmed' : '';
+    const matched = pairedB.has(p.id) ? ' ref-matched-header' : '';
+    html += `<th class="col-header team-b-color${dimmed}${matched}">${escHTML(p.faction)}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   teamAData.forEach((pA, i) => {
-    html += `<tr><th class="row-header team-a-color">${escHTML(pA.faction)}</th>`;
+    const aDimmed = !poolASet.has(pA.id) && !pairedA.has(pA.id) ? ' ref-dimmed' : '';
+    const aMatched = pairedA.has(pA.id) ? ' ref-matched-header' : '';
+    html += `<tr><th class="row-header team-a-color${aDimmed}${aMatched}">${escHTML(pA.faction)}</th>`;
     teamBData.forEach((pB, j) => {
       const key = `a${i}_b${j}`;
       const val = roundMatchupScores[key];
       const vol = roundMatchupVolatility[key];
       const cls = getMatrixCellClass(val);
-      html += `<td class="${cls}" style="font-weight:700;text-align:center">${val !== undefined ? val : '—'}${vol ? `<small class="ref-vol">±${vol}</small>` : ''}</td>`;
+      const isMatch = matchedPairs.has(`${i}_${j}`);
+      const isAvailable = poolASet.has(`a${i}`) && poolBSet.has(`b${j}`);
+      const isDimmed = !isMatch && !isAvailable;
+      let extra = '';
+      if (isMatch) extra = ' ref-cell-matched';
+      else if (isDimmed) extra = ' ref-cell-dimmed';
+
+      const volHTML = vol ? `<small class="ref-vol">±${vol}</small>` : '';
+      html += `<td class="${cls}${extra}" data-ref-key="${key}">${val !== undefined ? val : '—'}${volHTML}</td>`;
     });
     html += '</tr>';
   });
@@ -1192,6 +1260,7 @@ function renderCoachingTab() {
             <th>Matchup</th>
             <th>Table</th>
             <th class="est-col">Est.</th>
+            <th class="vol-col">Vol</th>
             <th class="br-col">BR 1</th>
             <th class="br-col">BR 2</th>
             <th class="br-col">BR 3</th>
@@ -1205,19 +1274,30 @@ function renderCoachingTab() {
 
   matches.forEach((m, idx) => {
     const mScores = saved[idx] || {};
-    const estKey = `a${matches.indexOf(m)}_b${matches.indexOf(m)}`;
-    // Try to get pre-match estimate from round matrix data
     let preEst = '—';
-    // Find the original indices
+    let vol = 0;
+    let tablePref = null;
     const aIdx = m.playerA ? parseInt(m.playerA.replace('a','')) : idx;
     const bIdx = m.playerB ? parseInt(m.playerB.replace('b','')) : idx;
     const matrixKey = `a${aIdx}_b${bIdx}`;
+    const prepKey = `${aIdx}_${bIdx}`;
+
     if (roundMatchupScores[matrixKey] !== undefined) {
       preEst = roundMatchupScores[matrixKey];
+      vol = roundMatchupVolatility[matrixKey] || 0;
+      if (m.table !== null && m.table !== undefined) {
+        const prefs = roundMatchupTablePrefs[matrixKey] || {};
+        tablePref = prefs[m.table] || null;
+      }
     } else if (rd.opponent && appState.opponents[rd.opponent]) {
       const oppData = appState.opponents[rd.opponent];
-      const prepKey = `${aIdx}_${bIdx}`;
-      if (oppData.matchups[prepKey]) preEst = oppData.matchups[prepKey].score;
+      if (oppData.matchups[prepKey]) {
+        preEst = oppData.matchups[prepKey].score;
+        vol = oppData.matchups[prepKey].volatility || 0;
+      }
+      if (m.table !== null && m.table !== undefined && oppData.tablePrefs[prepKey]) {
+        tablePref = oppData.tablePrefs[prepKey][m.table] || null;
+      }
     }
 
     // Calculate latest
@@ -1233,6 +1313,10 @@ function renderCoachingTab() {
     const latestCls = getMatrixCellClass(latestNum);
 
     const tableNum = m.table !== null && m.table !== undefined ? `T${m.table + 1}` : '—';
+    const tpIcon = tablePref === 'good' ? '<span class="coaching-tp coaching-tp-good" title="Good table">▲</span>'
+                 : tablePref === 'bad' ? '<span class="coaching-tp coaching-tp-bad" title="Bad table">▼</span>'
+                 : '';
+    const volHTML = vol ? `<span class="coaching-vol-badge">±${vol}</span>` : '<span class="coaching-vol-none">—</span>';
 
     html += `
       <tr>
@@ -1242,8 +1326,9 @@ function renderCoachingTab() {
           <span class="coaching-match-vs">vs</span>
           <span class="coaching-match-b">${escHTML(m.factionB || '?')}</span>
         </td>
-        <td class="table-cell">${tableNum}</td>
+        <td class="table-cell">${tableNum} ${tpIcon}</td>
         <td class="est-cell ${getMatrixCellClass(preEst)}">${preEst}</td>
+        <td class="vol-cell">${volHTML}</td>
     `;
 
     for (let br = 1; br <= 5; br++) {
@@ -1259,6 +1344,7 @@ function renderCoachingTab() {
       <tr class="total-row">
         <td colspan="3" class="total-label">TEAM TOTAL</td>
         <td class="est-cell" id="coaching-total-est">—</td>
+        <td></td>
         <td id="coaching-total-br1">—</td>
         <td id="coaching-total-br2">—</td>
         <td id="coaching-total-br3">—</td>

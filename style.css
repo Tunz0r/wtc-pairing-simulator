@@ -515,6 +515,16 @@ details[open] .matrix-ref-toggle::before {
   font-weight: 700;
 }
 
+/* Live matrix reference highlights */
+.ref-dimmed { opacity: 0.25 !important; }
+.ref-matched-header { opacity: 0.5; text-decoration: line-through; }
+.ref-cell-dimmed { opacity: 0.15 !important; }
+.ref-cell-matched {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 8px rgba(255, 214, 0, 0.3);
+}
+
 /* Table Preferences Panel */
 .table-prefs-panel {
   margin-top: 16px;
@@ -940,6 +950,54 @@ details[open] .matrix-ref-toggle::before {
 .match-map { font-size: 0.7rem; color: var(--text-secondary); }
 .match-mission { font-size: 0.7rem; color: var(--text-secondary); }
 .match-type { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+/* Match estimate + volatility in pairing board */
+.match-estimate {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin: 2px 0;
+}
+.match-estimate-inline {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.match-vol {
+  font-weight: 500;
+  font-size: 0.7rem;
+  opacity: 0.8;
+  margin-left: 2px;
+}
+
+/* Table preference indicator on match rows */
+.match-tp { font-size: 0.75rem; margin-left: 4px; }
+.match-tp-good { color: #43a047; }
+.match-tp-bad { color: #e53935; }
+
+/* Table select preference indicators */
+.table-btn-good {
+  border-color: #43a047 !important;
+  box-shadow: inset 0 0 0 2px rgba(67, 160, 71, 0.2);
+}
+.table-btn-bad {
+  border-color: #e53935 !important;
+  box-shadow: inset 0 0 0 2px rgba(229, 57, 53, 0.2);
+}
+.table-pref-tag {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.table-pref-tag.good { color: #43a047; }
+.table-pref-tag.bad { color: #e53935; }
 
 /* Available pools */
 .board-section {
@@ -1619,11 +1677,36 @@ details[open] .matrix-ref-toggle::before {
 .coaching-match-b { color: var(--team-b); font-weight: 600; }
 .coaching-match-vs { color: var(--text-muted); margin: 0 4px; }
 
+/* Est cell keeps full matrix coloring (bg + text) */
 .coaching-table .est-cell {
-  background: var(--bg-card);
   font-weight: 700;
   font-size: 0.9rem;
 }
+
+.coaching-table .vol-cell {
+  background: var(--bg-card);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.coaching-vol-badge {
+  display: inline-block;
+  background: rgba(255, 152, 0, 0.2);
+  color: #ffb74d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.coaching-vol-none {
+  color: var(--text-muted);
+}
+
+/* Table pref icons in coaching */
+.coaching-tp { font-size: 0.75rem; margin-left: 2px; }
+.coaching-tp-good { color: #43a047; }
+.coaching-tp-bad { color: #e53935; }
 
 .coaching-table .table-cell {
   font-size: 0.75rem;
@@ -1656,11 +1739,17 @@ details[open] .matrix-ref-toggle::before {
   font-weight: 400;
 }
 
-/* Latest column */
+/* Latest column: colored text, dark background */
 .coaching-latest {
   font-weight: 700;
   font-size: 0.95rem;
+  background: var(--bg-card) !important;
 }
+.coaching-latest.matrix-cell-brown  { color: #d4a574 !important; }
+.coaching-latest.matrix-cell-red    { color: #ef5350 !important; }
+.coaching-latest.matrix-cell-yellow { color: #fdd835 !important; }
+.coaching-latest.matrix-cell-green  { color: #66bb6a !important; }
+.coaching-latest.matrix-cell-blue   { color: #42a5f5 !important; }
 
 /* Total row */
 .coaching-table .total-row td {
