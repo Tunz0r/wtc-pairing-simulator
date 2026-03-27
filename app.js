@@ -2,721 +2,493 @@
 // WTC 8-Man Pairing Simulator — Main App
 // ============================================
 
+const STORAGE_KEY = 'wtc_pairing_app';
+
+// --- App State ---
+let appState = {
+  myTeam: { name: '', players: Array.from({ length: 8 }, () => ({ faction: '', armyList: '' })) },
+  opponents: {},       // { countryName: { players: [...], matchups: {}, tablePrefs: {} } }
+  rounds: Array(7).fill(null), // each: { opponent, deployment, mission, matchups, tablePrefs, matches, log, completed }
+};
+
 let engine = null;
+let currentRoundIdx = 0;       // 0-6 for rounds 1-7
+let currentPrepCountry = null;
+let selectedMatrixCell = null;
+
+// Transient round data (not saved)
 let teamAData = [];
 let teamBData = [];
 let tablesData = [];
-let roundDeployment = '';
-let roundMission = '';
-let matchupScores = {};      // "a{i}_b{j}" → score (0–20)
-let matchupVolatility = {};  // "a{i}_b{j}" → volatility (0–5)
-let matchupTablePrefs = {};  // "a{i}_b{j}" → { tableIdx: 'good'|'bad'|'neutral' }
-let selectedMatrixCell = null; // currently selected cell key for table prefs
+let roundMatchupScores = {};
+let roundMatchupVolatility = {};
+let roundMatchupTablePrefs = {};
 
-// --- Initialization ---
+// --- Init ---
 
 function init() {
-  buildPlayerInputs('team-a-players', 'a');
-  buildPlayerInputs('team-b-players', 'b');
-  buildRoundConfig();
+  loadState();
+  buildMyTeamInputs();
+  buildPrepUI();
+  buildRoundUI();
   bindNavigation();
-  bindPhaseActions();
   initMapTooltip();
-  buildMatrix();
-
-  // Rebuild matrix headers when factions change
-  document.querySelectorAll('.player-faction').forEach(input => {
-    input.addEventListener('change', () => buildMatrix());
-  });
+  renderOverview();
 }
 
-// --- Player Input Setup ---
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      appState = { ...appState, ...saved };
+      if (!appState.rounds) appState.rounds = Array(7).fill(null);
+      while (appState.rounds.length < 7) appState.rounds.push(null);
+    }
+  } catch (e) { console.warn('Failed to load state', e); }
+}
 
-function buildPlayerInputs(containerId, team) {
-  const container = document.getElementById(containerId);
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch (e) { console.warn('Failed to save', e); }
+}
+
+// ===========================
+// TAB 1: My Team
+// ===========================
+
+function buildMyTeamInputs() {
+  const container = document.getElementById('my-team-players');
   container.innerHTML = '';
+  document.getElementById('my-team-name').value = appState.myTeam.name || '';
+
   for (let i = 0; i < 8; i++) {
+    const p = appState.myTeam.players[i] || { faction: '', armyList: '' };
     const wrapper = document.createElement('div');
     wrapper.className = 'player-entry';
     wrapper.innerHTML = `
       <div class="player-row">
         <span class="player-num">${i + 1}</span>
-        <input type="text" class="player-faction" id="${team}-faction-${i}" placeholder="Army / Faction" list="faction-list" />
-        <button type="button" class="btn-list-toggle" data-target="${team}-list-${i}" title="Army List">&#9776;</button>
+        <input type="text" class="player-faction" id="my-faction-${i}" placeholder="Army / Faction" list="faction-list" value="${escHTML(p.faction)}" />
+        <button type="button" class="btn-list-toggle" data-target="my-list-${i}" title="Army List">&#9776;</button>
       </div>
-      <div class="army-list-wrap" id="${team}-list-wrap-${i}" style="display:none">
-        <textarea class="army-list-input" id="${team}-list-${i}" placeholder="Paste army list here..." rows="8"></textarea>
+      <div class="army-list-wrap" id="my-list-wrap-${i}" style="display:none">
+        <textarea class="army-list-input" id="my-list-${i}" placeholder="Paste army list here..." rows="8">${escHTML(p.armyList)}</textarea>
       </div>
     `;
     container.appendChild(wrapper);
   }
 
-  // Toggle army list textareas
-  container.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-list-toggle');
-    if (!btn) return;
-    const targetId = btn.dataset.target;
-    const wrap = document.getElementById(targetId.replace('list-', 'list-wrap-'));
-    if (wrap) {
-      const isOpen = wrap.style.display !== 'none';
-      wrap.style.display = isOpen ? 'none' : '';
-      btn.classList.toggle('active', !isOpen);
-    }
-  });
+  addListToggle(container);
+  ensureFactionDatalist();
 
-  // Add datalist for factions (once)
-  if (!document.getElementById('faction-list')) {
-    const dl = document.createElement('datalist');
-    dl.id = 'faction-list';
-    FACTIONS_40K.forEach(f => {
+  // Auto-save on change
+  container.addEventListener('input', () => collectMyTeam());
+  document.getElementById('my-team-name').addEventListener('input', () => collectMyTeam());
+
+  document.getElementById('btn-fill-my-team').addEventListener('click', () => {
+    fillDummyMyTeam();
+    buildMyTeamInputs();
+  });
+  document.getElementById('btn-save-my-team').addEventListener('click', () => {
+    collectMyTeam();
+    saveState();
+    showToast('Team saved!');
+  });
+}
+
+function collectMyTeam() {
+  appState.myTeam.name = document.getElementById('my-team-name').value.trim();
+  for (let i = 0; i < 8; i++) {
+    appState.myTeam.players[i] = {
+      faction: document.getElementById(`my-faction-${i}`).value.trim(),
+      armyList: document.getElementById(`my-list-${i}`).value.trim(),
+    };
+  }
+}
+
+function fillDummyMyTeam() {
+  const factions = pickTeamFactions();
+  appState.myTeam.name = 'Belgium';
+  for (let i = 0; i < 8; i++) {
+    appState.myTeam.players[i] = { faction: factions[i], armyList: '' };
+  }
+}
+
+// ===========================
+// TAB 2: Prep
+// ===========================
+
+function buildPrepUI() {
+  populateCountryDropdown();
+  populatePrepDeployment();
+
+  document.getElementById('btn-add-country').addEventListener('click', addCountry);
+  document.getElementById('btn-remove-country').addEventListener('click', removeCountry);
+  document.getElementById('prep-country-select').addEventListener('change', onPrepCountryChange);
+  document.getElementById('prep-deployment').addEventListener('change', () => { if (currentPrepCountry) renderPrepMatrix(); });
+  document.getElementById('btn-fill-matrix').addEventListener('click', () => { if (currentPrepCountry) fillDummyPrepMatrix(); });
+  document.getElementById('btn-fill-opp-team').addEventListener('click', () => { if (currentPrepCountry) fillDummyOppTeam(); });
+  document.getElementById('btn-run-algo').addEventListener('click', () => { if (currentPrepCountry) runOptimalPairing('prep'); });
+  document.getElementById('btn-save-prep').addEventListener('click', () => { collectPrepData(); saveState(); showToast('Prep saved!'); });
+}
+
+function populateCountryDropdown() {
+  const sel = document.getElementById('prep-country-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Select Opponent Country —</option>';
+
+  // Countries that have prep data
+  const prepped = Object.keys(appState.opponents).sort();
+  if (prepped.length > 0) {
+    const grp = document.createElement('optgroup');
+    grp.label = 'Prepped Opponents';
+    prepped.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = f;
-      dl.appendChild(opt);
+      opt.value = c; opt.textContent = c;
+      grp.appendChild(opt);
     });
-    document.body.appendChild(dl);
-  }
-}
-
-// --- Dummy Data ---
-
-function fillDummyTeams() {
-  const shuffle = arr => {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  };
-
-  // Build a valid team of 8 unique factions.
-  // Pick 7 from UNIQUE_FACTIONS + 1 SM chapter, or 8 from UNIQUE_FACTIONS.
-  // We always include one SM chapter slot for variety.
-  function pickTeamFactions() {
-    const nonSM = shuffle(UNIQUE_FACTIONS);
-    const smChapter = shuffle(SPACE_MARINE_CHAPTERS)[0];
-    // Take 7 non-SM factions + 1 SM chapter
-    const picked = nonSM.slice(0, 7);
-    picked.push(smChapter);
-    return shuffle(picked);
+    sel.appendChild(grp);
   }
 
-  const factionsA = pickTeamFactions();
-  const factionsB = pickTeamFactions();
-
-  for (let i = 0; i < 8; i++) {
-    document.getElementById(`a-faction-${i}`).value = factionsA[i];
-    document.getElementById(`b-faction-${i}`).value = factionsB[i];
-  }
-
-  document.getElementById('team-a-name').value = 'Waaagh Warriors';
-  document.getElementById('team-b-name').value = 'Hive Fleet Sigma';
-
-  buildMatrix();
-}
-
-function fillDummyMatrix() {
-  // Distribution: 5% brown(0-2), 25% red(3-7), 40% yellow(8-12), 25% green(13-17), 5% blue(18-20)
-  function randomScore() {
-    const r = Math.random() * 100;
-    if (r < 5) return Math.floor(Math.random() * 3);          // 0-2
-    if (r < 30) return 3 + Math.floor(Math.random() * 5);     // 3-7
-    if (r < 70) return 8 + Math.floor(Math.random() * 5);     // 8-12
-    if (r < 95) return 13 + Math.floor(Math.random() * 5);    // 13-17
-    return 18 + Math.floor(Math.random() * 3);                 // 18-20
-  }
-
-  matchupScores = {};
-  matchupVolatility = {};
-  for (let i = 0; i < 8; i++) {
-    for (let j = 0; j < 8; j++) {
-      const key = `a${i}_b${j}`;
-      matchupScores[key] = randomScore();
-      if (Math.random() < 0.1) {
-        matchupVolatility[key] = 1 + Math.floor(Math.random() * 5); // 1-5
-      }
-    }
-  }
-  buildMatrix();
-}
-
-// --- Matchup Matrix ---
-
-function getMatrixPlayers() {
-  const a = [], b = [];
-  for (let i = 0; i < 8; i++) {
-    a.push({ faction: document.getElementById(`a-faction-${i}`).value.trim() || '?' });
-    b.push({ faction: document.getElementById(`b-faction-${i}`).value.trim() || '?' });
-  }
-  return { a, b };
-}
-
-function buildMatrix() {
-  const thead = document.getElementById('matrix-thead');
-  const tbody = document.getElementById('matrix-tbody');
-  const { a: teamA, b: teamB } = getMatrixPlayers();
-
-  // Header row
-  let headerHTML = '<tr><th class="matrix-corner"></th>';
-  for (let j = 0; j < 8; j++) {
-    headerHTML += `<th class="col-header team-b-color" title="${teamB[j].faction}">${teamB[j].faction}</th>`;
-  }
-  headerHTML += '</tr>';
-  thead.innerHTML = headerHTML;
-
-  // Body rows with score + volatility
-  let bodyHTML = '';
-  for (let i = 0; i < 8; i++) {
-    bodyHTML += `<tr>`;
-    bodyHTML += `<th class="row-header team-a-color" title="${teamA[i].faction}">${teamA[i].faction}</th>`;
-    for (let j = 0; j < 8; j++) {
-      const key = `a${i}_b${j}`;
-      const score = matchupScores[key] !== undefined ? matchupScores[key] : '';
-      const vol = matchupVolatility[key] !== undefined ? matchupVolatility[key] : '';
-      const cls = getMatrixCellClass(score);
-      const hasTablePrefs = matchupTablePrefs[key] && Object.keys(matchupTablePrefs[key]).length > 0;
-      const selClass = selectedMatrixCell === key ? ' matrix-cell-selected' : '';
-      const tpIndicator = hasTablePrefs ? '<span class="tp-dot" title="Has table preferences">&#9679;</span>' : '';
-      bodyHTML += `<td class="${cls}${selClass}" data-key="${key}">
-        <div class="cell-inputs">
-          <input type="number" class="matrix-input" data-key="${key}" min="0" max="20" value="${score}" placeholder="—" title="Expected score (0–20)">
-          <input type="number" class="matrix-vol" data-key="${key}" min="0" max="5" value="${vol}" placeholder="± vol" title="Volatility (0–5)">
-        </div>
-        ${tpIndicator}
-      </td>`;
-    }
-    bodyHTML += '</tr>';
-  }
-  tbody.innerHTML = bodyHTML;
-
-  // Score input handlers
-  tbody.querySelectorAll('.matrix-input').forEach(input => {
-    input.addEventListener('input', (e) => {
-      let val = e.target.value.trim();
-      const key = e.target.dataset.key;
-      if (val === '') {
-        delete matchupScores[key];
-      } else {
-        val = Math.max(0, Math.min(20, parseInt(val) || 0));
-        e.target.value = val;
-        matchupScores[key] = val;
-      }
-      updateCellColor(e.target.closest('td'), key);
-    });
-  });
-
-  // Volatility input handlers
-  tbody.querySelectorAll('.matrix-vol').forEach(input => {
-    input.addEventListener('input', (e) => {
-      let val = e.target.value.trim();
-      const key = e.target.dataset.key;
-      if (val === '') {
-        delete matchupVolatility[key];
-      } else {
-        val = Math.max(0, Math.min(5, parseInt(val) || 0));
-        e.target.value = val;
-        matchupVolatility[key] = val;
-      }
-    });
-  });
-
-  // Cell click → select for table prefs (works even when clicking inputs)
-  tbody.querySelectorAll('td[data-key]').forEach(td => {
-    td.addEventListener('click', () => {
-      const key = td.dataset.key;
-      if (selectedMatrixCell === key) {
-        selectedMatrixCell = null;
-      } else {
-        selectedMatrixCell = key;
-      }
-      tbody.querySelectorAll('td[data-key]').forEach(c => c.classList.toggle('matrix-cell-selected', c.dataset.key === selectedMatrixCell));
-      renderTablePrefsPanel();
-    });
-  });
-
-  renderTablePrefsPanel();
-}
-
-function updateCellColor(td, key) {
-  const val = matchupScores[key];
-  // Remove old color classes, keep selected
-  td.className = getMatrixCellClass(val) + (selectedMatrixCell === key ? ' matrix-cell-selected' : '');
-}
-
-function getMatrixCellClass(val) {
-  if (val === '' || val === undefined || val === null) return 'matrix-cell-empty';
-  const v = parseInt(val);
-  if (isNaN(v)) return 'matrix-cell-empty';
-  if (v <= 2) return 'matrix-cell-brown';
-  if (v <= 7) return 'matrix-cell-red';
-  if (v <= 12) return 'matrix-cell-yellow';
-  if (v <= 17) return 'matrix-cell-green';
-  return 'matrix-cell-blue';
-}
-
-function renderTablePrefsPanel() {
-  const panel = document.getElementById('table-prefs-panel');
-  if (!selectedMatrixCell) {
-    panel.style.display = 'none';
-    return;
-  }
-
-  const key = selectedMatrixCell;
-  const [aIdx, bIdx] = key.replace('a','').split('_b').map(Number);
-  const { a: teamA, b: teamB } = getMatrixPlayers();
-  const prefs = matchupTablePrefs[key] || {};
-
-  // Get current deployment to show table/map names
-  const dep = document.getElementById('round-deployment').value;
-  const maps = dep ? WTC_MAPS[dep] : null;
-
-  let html = `
-    <div class="tp-header">
-      <span class="team-a-color">${teamA[aIdx].faction}</span>
-      <span class="tp-vs">vs</span>
-      <span class="team-b-color">${teamB[bIdx].faction}</span>
-      <span class="tp-label">— Table Preferences for Team A</span>
-    </div>
-    <div class="tp-buttons">
-  `;
-
-  for (let t = 0; t < 8; t++) {
-    const pref = prefs[t] || 'neutral';
-    const mapIdx = typeof WTC_TABLE_MAP_INDICES !== 'undefined' ? WTC_TABLE_MAP_INDICES[t] : t;
-    const mapName = maps ? maps[mapIdx].name : `Table ${t + 1}`;
-    const label = `T${t + 1}`;
-    html += `
-      <button class="tp-btn tp-${pref}" data-table="${t}" data-key="${key}" title="${mapName}">
-        <strong>${label}</strong>
-        <small>${mapName}</small>
-        <span class="tp-state">${pref === 'good' ? '✓' : pref === 'bad' ? '✗' : '—'}</span>
-      </button>
-    `;
-  }
-
-  html += `</div>
-    <p class="tp-hint">Click to cycle: neutral → good → bad → neutral</p>
-  `;
-
-  panel.innerHTML = html;
-  panel.style.display = '';
-
-  // Button handlers
-  panel.querySelectorAll('.tp-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const t = parseInt(btn.dataset.table);
-      const k = btn.dataset.key;
-      if (!matchupTablePrefs[k]) matchupTablePrefs[k] = {};
-      const current = matchupTablePrefs[k][t] || 'neutral';
-      const next = current === 'neutral' ? 'good' : current === 'good' ? 'bad' : 'neutral';
-      if (next === 'neutral') {
-        delete matchupTablePrefs[k][t];
-      } else {
-        matchupTablePrefs[k][t] = next;
-      }
-      renderTablePrefsPanel();
-      // Update dot indicator in matrix
-      const td = document.querySelector(`td[data-key="${k}"]`);
-      if (td) {
-        let dot = td.querySelector('.tp-dot');
-        const hasPrefs = matchupTablePrefs[k] && Object.keys(matchupTablePrefs[k]).length > 0;
-        if (hasPrefs && !dot) {
-          dot = document.createElement('span');
-          dot.className = 'tp-dot';
-          dot.title = 'Has table preferences';
-          dot.innerHTML = '&#9679;';
-          td.appendChild(dot);
-        } else if (!hasPrefs && dot) {
-          dot.remove();
-        }
-      }
-    });
-  });
-}
-
-// --- Optimal Pairing Algorithm ---
-
-function runOptimalPairing() {
-  const resultsEl = document.getElementById('algorithm-results');
-
-  // Validate: need all 64 scores
-  let missing = 0;
-  for (let i = 0; i < 8; i++) {
-    for (let j = 0; j < 8; j++) {
-      if (matchupScores[`a${i}_b${j}`] === undefined) missing++;
-    }
-  }
-  if (missing > 0) {
-    resultsEl.innerHTML = `<p class="algo-error">Please fill in all ${missing} missing matchup scores first.</p>`;
-    resultsEl.style.display = '';
-    return;
-  }
-
-  const { a: teamA, b: teamB } = getMatrixPlayers();
-
-  // Build score matrix [i][j] = Team A's expected score when a[i] faces b[j]
-  const S = [];
-  const V = [];
-  for (let i = 0; i < 8; i++) {
-    S[i] = [];
-    V[i] = [];
-    for (let j = 0; j < 8; j++) {
-      S[i][j] = matchupScores[`a${i}_b${j}`];
-      V[i][j] = matchupVolatility[`a${i}_b${j}`] || 0;
+  // All WTC countries not yet prepped
+  if (typeof WTC_COUNTRIES !== 'undefined') {
+    const unprepped = WTC_COUNTRIES.filter(c => !appState.opponents[c]);
+    if (unprepped.length > 0) {
+      const grp2 = document.createElement('optgroup');
+      grp2.label = 'All WTC Countries';
+      unprepped.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        grp2.appendChild(opt);
+      });
+      sel.appendChild(grp2);
     }
   }
 
-  // Use Hungarian algorithm to find optimal assignment (maximize Team A score)
-  const bestAssignment = hungarianMax(S);
-  const bestTotal = bestAssignment.reduce((sum, j, i) => sum + S[i][j], 0);
-
-  // Also find worst case (minimize Team A = maximize Team B)
-  const worstAssignment = hungarianMin(S);
-  const worstTotal = worstAssignment.reduce((sum, j, i) => sum + S[i][j], 0);
-
-  // Find top 5 assignments by brute force sampling (full brute force for 8! = 40320)
-  const allPerms = getAllPermutations(8);
-  const scored = allPerms.map(perm => ({
-    perm,
-    total: perm.reduce((sum, j, i) => sum + S[i][j], 0),
-    avgVol: perm.reduce((sum, j, i) => sum + V[i][j], 0) / 8,
-  }));
-  scored.sort((a, b) => b.total - a.total);
-
-  const top5 = scored.slice(0, 5);
-  const bottom5 = scored.slice(-5).reverse();
-  const avg = scored.reduce((s, x) => s + x.total, 0) / scored.length;
-
-  // Generate pairing strategy recommendations
-  const strategy = generatePairingStrategy(S, V, teamA, teamB, bestAssignment);
-
-  // Render results
-  let html = `
-    <h3>Optimal Pairing Analysis</h3>
-    <div class="algo-summary">
-      <div class="algo-stat algo-stat-best">
-        <span class="algo-stat-label">Best Case</span>
-        <span class="algo-stat-value">${bestTotal}</span>
-      </div>
-      <div class="algo-stat algo-stat-avg">
-        <span class="algo-stat-label">Average</span>
-        <span class="algo-stat-value">${avg.toFixed(1)}</span>
-      </div>
-      <div class="algo-stat algo-stat-worst">
-        <span class="algo-stat-label">Worst Case</span>
-        <span class="algo-stat-value">${worstTotal}</span>
-      </div>
-    </div>
-
-    <h4>Best Pairing for Team A</h4>
-    <table class="algo-table">
-      <thead><tr><th>Team A</th><th>Team B</th><th>Score</th><th>Vol</th></tr></thead>
-      <tbody>
-        ${bestAssignment.map((j, i) => `
-          <tr>
-            <td class="team-a-color">${teamA[i].faction}</td>
-            <td class="team-b-color">${teamB[j].faction}</td>
-            <td class="${getMatrixCellClass(S[i][j])}" style="font-weight:700;text-align:center">${S[i][j]}</td>
-            <td style="text-align:center">${V[i][j] ? '±' + V[i][j] : '—'}</td>
-          </tr>
-        `).join('')}
-        <tr class="algo-total-row">
-          <td colspan="2"><strong>Total</strong></td>
-          <td style="text-align:center"><strong>${bestTotal}</strong></td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h4>Worst Pairing for Team A <small>(opponent's ideal)</small></h4>
-    <table class="algo-table">
-      <thead><tr><th>Team A</th><th>Team B</th><th>Score</th><th>Vol</th></tr></thead>
-      <tbody>
-        ${worstAssignment.map((j, i) => `
-          <tr>
-            <td class="team-a-color">${teamA[i].faction}</td>
-            <td class="team-b-color">${teamB[j].faction}</td>
-            <td class="${getMatrixCellClass(S[i][j])}" style="font-weight:700;text-align:center">${S[i][j]}</td>
-            <td style="text-align:center">${V[i][j] ? '±' + V[i][j] : '—'}</td>
-          </tr>
-        `).join('')}
-        <tr class="algo-total-row">
-          <td colspan="2"><strong>Total</strong></td>
-          <td style="text-align:center"><strong>${worstTotal}</strong></td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h4>Pairing Strategy Recommendations</h4>
-    <div class="algo-strategy">
-      ${strategy}
-    </div>
-  `;
-
-  resultsEl.innerHTML = html;
-  resultsEl.style.display = '';
+  if (current) sel.value = current;
 }
 
-function generatePairingStrategy(S, V, teamA, teamB, optimalAssignment) {
-  // Analyze which players are "flexible" (small range) vs "critical" (big range)
-  const playerAnalysis = [];
-  for (let i = 0; i < 8; i++) {
-    const scores = S[i].slice();
-    const min = Math.min(...scores);
-    const max = Math.max(...scores);
-    const avg = scores.reduce((a, b) => a + b, 0) / 8;
-    const range = max - min;
-    playerAnalysis.push({ idx: i, faction: teamA[i].faction, min, max, avg, range, scores });
-  }
-
-  // Opponent analysis
-  const oppAnalysis = [];
-  for (let j = 0; j < 8; j++) {
-    const scores = S.map(row => row[j]);
-    const min = Math.min(...scores);
-    const max = Math.max(...scores);
-    const avg = scores.reduce((a, b) => a + b, 0) / 8;
-    oppAnalysis.push({ idx: j, faction: teamB[j].faction, min, max, avg });
-  }
-
-  // Defender recommendation: put forward a player who is "safe" — small range, decent average
-  // The ideal defender is one whose worst matchup isn't terrible and who doesn't have a critical best matchup
-  const defenderCandidates = [...playerAnalysis].sort((a, b) => {
-    // Prefer players with high minimum scores (safe) and low range (not polarized)
-    const safeA = a.min * 2 - a.range;
-    const safeB = b.min * 2 - b.range;
-    return safeB - safeA;
-  });
-
-  // Attacker recommendation: players with the most polarized matchups (high range, low min)
-  // These are players you want to target specific opponents with
-  const attackerCandidates = [...playerAnalysis].sort((a, b) => b.range - a.range);
-
-  // Opponent vulnerability: which Team B players give Team A the most points on average
-  const oppVulnerable = [...oppAnalysis].sort((a, b) => b.avg - a.avg);
-
-  // Opponent threats: which Team B players take the most from Team A
-  const oppThreats = [...oppAnalysis].sort((a, b) => a.avg - b.avg);
-
-  let html = `
-    <div class="strat-section">
-      <h5>Defender Priorities <small>(safe, unpunishable picks)</small></h5>
-      <ol class="strat-list">
-        ${defenderCandidates.slice(0, 3).map(p => `
-          <li>
-            <strong class="team-a-color">${p.faction}</strong> —
-            Range: ${p.min}–${p.max}, Avg: ${p.avg.toFixed(1)}
-            <span class="strat-tag strat-safe">Safe pick</span>
-          </li>
-        `).join('')}
-      </ol>
-    </div>
-
-    <div class="strat-section">
-      <h5>Attacker Priorities <small>(target specific opponents)</small></h5>
-      <ol class="strat-list">
-        ${attackerCandidates.slice(0, 3).map(p => {
-          const bestJ = p.scores.indexOf(Math.max(...p.scores));
-          return `
-            <li>
-              <strong class="team-a-color">${p.faction}</strong> —
-              Best: ${Math.max(...p.scores)} vs <strong class="team-b-color">${teamB[bestJ].faction}</strong>,
-              Worst: ${p.min}
-              <span class="strat-tag strat-attack">High impact</span>
-            </li>
-          `;
-        }).join('')}
-      </ol>
-    </div>
-
-    <div class="strat-section">
-      <h5>Opponent Vulnerabilities <small>(target these)</small></h5>
-      <ol class="strat-list">
-        ${oppVulnerable.slice(0, 3).map(p => `
-          <li>
-            <strong class="team-b-color">${p.faction}</strong> —
-            Avg score for us: ${p.avg.toFixed(1)} (${p.min}–${p.max})
-            <span class="strat-tag strat-target">Target</span>
-          </li>
-        `).join('')}
-      </ol>
-    </div>
-
-    <div class="strat-section">
-      <h5>Opponent Threats <small>(protect against)</small></h5>
-      <ol class="strat-list">
-        ${oppThreats.slice(0, 3).map(p => `
-          <li>
-            <strong class="team-b-color">${p.faction}</strong> —
-            Avg score for us: ${p.avg.toFixed(1)} (${p.min}–${p.max})
-            <span class="strat-tag strat-danger">Dangerous</span>
-          </li>
-        `).join('')}
-      </ol>
-    </div>
-  `;
-
-  return html;
-}
-
-// --- Hungarian Algorithm (Kuhn-Munkres) for assignment ---
-
-function hungarianMax(matrix) {
-  // Convert to minimization by negating
-  const n = matrix.length;
-  const neg = matrix.map(row => row.map(v => -v));
-  return hungarianMin_internal(neg);
-}
-
-function hungarianMin(matrix) {
-  return hungarianMin_internal(matrix);
-}
-
-function hungarianMin_internal(cost) {
-  const n = cost.length;
-  // Pad to square if needed (already 8x8)
-  const u = new Array(n + 1).fill(0);
-  const v = new Array(n + 1).fill(0);
-  const p = new Array(n + 1).fill(0);
-  const way = new Array(n + 1).fill(0);
-
-  for (let i = 1; i <= n; i++) {
-    p[0] = i;
-    let j0 = 0;
-    const minv = new Array(n + 1).fill(Infinity);
-    const used = new Array(n + 1).fill(false);
-
-    do {
-      used[j0] = true;
-      let i0 = p[j0], delta = Infinity, j1;
-
-      for (let j = 1; j <= n; j++) {
-        if (!used[j]) {
-          const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
-          if (cur < minv[j]) {
-            minv[j] = cur;
-            way[j] = j0;
-          }
-          if (minv[j] < delta) {
-            delta = minv[j];
-            j1 = j;
-          }
-        }
-      }
-
-      for (let j = 0; j <= n; j++) {
-        if (used[j]) {
-          u[p[j]] += delta;
-          v[j] -= delta;
-        } else {
-          minv[j] -= delta;
-        }
-      }
-
-      j0 = j1;
-    } while (p[j0] !== 0);
-
-    do {
-      const j1 = way[j0];
-      p[j0] = p[j1];
-      j0 = j1;
-    } while (j0);
-  }
-
-  // Extract assignment: result[i] = j (0-indexed)
-  const result = new Array(n);
-  for (let j = 1; j <= n; j++) {
-    result[p[j] - 1] = j - 1;
-  }
-  return result;
-}
-
-// Generate all permutations of [0..n-1]
-function getAllPermutations(n) {
-  const result = [];
-  const arr = Array.from({ length: n }, (_, i) => i);
-
-  function permute(start) {
-    if (start === n) {
-      result.push([...arr]);
-      return;
-    }
-    for (let i = start; i < n; i++) {
-      [arr[start], arr[i]] = [arr[i], arr[start]];
-      permute(start + 1);
-      [arr[start], arr[i]] = [arr[i], arr[start]];
-    }
-  }
-
-  permute(0);
-  return result;
-}
-
-// --- Matrix Reference (read-only for pairing phase) ---
-
-function buildMatrixReference() {
-  const body = document.getElementById('matrix-ref-body');
-  if (!teamAData.length || !teamBData.length) {
-    body.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">No team data yet.</p>';
-    return;
-  }
-
-  let html = `
-    <div class="matrix-legend">
-      <span class="legend-item legend-brown">0–2</span>
-      <span class="legend-item legend-red">3–7</span>
-      <span class="legend-item legend-yellow">8–12</span>
-      <span class="legend-item legend-green">13–17</span>
-      <span class="legend-item legend-blue">18–20</span>
-    </div>
-    <table class="matchup-matrix">
-      <thead><tr><th></th>`;
-
-  teamBData.forEach(p => {
-    html += `<th class="col-header team-b-color">${p.faction}</th>`;
-  });
-  html += '</tr></thead><tbody>';
-
-  teamAData.forEach((pA, i) => {
-    html += `<tr><th class="row-header team-a-color">${pA.faction}</th>`;
-    teamBData.forEach((pB, j) => {
-      const key = `a${i}_b${j}`;
-      const val = matchupScores[key];
-      const vol = matchupVolatility[key];
-      const cls = getMatrixCellClass(val);
-      const display = val !== undefined ? val : '—';
-      const volDisplay = vol !== undefined ? `<small class="ref-vol">±${vol}</small>` : '';
-      html += `<td class="${cls}" style="font-weight:700;text-align:center">${display}${volDisplay}</td>`;
-    });
-    html += '</tr>';
-  });
-
-  html += '</tbody></table>';
-  body.innerHTML = html;
-}
-
-// --- Round Config (Deployment + Mission) ---
-
-function buildRoundConfig() {
-  const depSelect = document.getElementById('round-deployment');
-  depSelect.innerHTML = `
-    <option value="">— Select Deployment —</option>
+function populatePrepDeployment() {
+  const sel = document.getElementById('prep-deployment');
+  sel.innerHTML = `
+    <option value="">— Select —</option>
     ${WTC_DEPLOYMENTS.map(d => `<option value="${d}">${d}</option>`).join('')}
     <optgroup label="BETA">
       ${WTC_DEPLOYMENTS_BETA.map(d => `<option value="${d}">${d} (BETA)</option>`).join('')}
     </optgroup>
   `;
+}
 
-  const missionSelect = document.getElementById('round-mission');
-  missionSelect.innerHTML = `
-    <option value="">— Select Mission —</option>
+function addCountry() {
+  const sel = document.getElementById('prep-country-select');
+  let country = sel.value;
+  if (!country) {
+    country = prompt('Enter opponent country/team name:');
+    if (!country) return;
+    country = country.trim();
+  }
+  if (!appState.opponents[country]) {
+    appState.opponents[country] = {
+      players: Array.from({ length: 8 }, () => ({ faction: '', armyList: '' })),
+      matchups: {},
+      tablePrefs: {},
+    };
+    saveState();
+  }
+  populateCountryDropdown();
+  sel.value = country;
+  onPrepCountryChange();
+}
+
+function removeCountry() {
+  if (!currentPrepCountry) return;
+  if (!confirm(`Remove all prep data for ${currentPrepCountry}?`)) return;
+  delete appState.opponents[currentPrepCountry];
+  currentPrepCountry = null;
+  saveState();
+  populateCountryDropdown();
+  document.getElementById('prep-country-select').value = '';
+  onPrepCountryChange();
+}
+
+function onPrepCountryChange() {
+  const country = document.getElementById('prep-country-select').value;
+  const editor = document.getElementById('prep-editor');
+  const removeBtn = document.getElementById('btn-remove-country');
+
+  if (!country) {
+    currentPrepCountry = null;
+    editor.style.display = 'none';
+    removeBtn.style.display = 'none';
+    return;
+  }
+
+  currentPrepCountry = country;
+  // Ensure opponent data exists
+  if (!appState.opponents[country]) {
+    appState.opponents[country] = {
+      players: Array.from({ length: 8 }, () => ({ faction: '', armyList: '' })),
+      matchups: {},
+      tablePrefs: {},
+    };
+  }
+
+  editor.style.display = '';
+  removeBtn.style.display = '';
+  document.getElementById('opp-team-title').textContent = country;
+  buildOppTeamInputs();
+  renderPrepMatrix();
+}
+
+function buildOppTeamInputs() {
+  const container = document.getElementById('opp-team-players');
+  container.innerHTML = '';
+  const opp = appState.opponents[currentPrepCountry];
+
+  for (let i = 0; i < 8; i++) {
+    const p = opp.players[i] || { faction: '', armyList: '' };
+    const wrapper = document.createElement('div');
+    wrapper.className = 'player-entry';
+    wrapper.innerHTML = `
+      <div class="player-row">
+        <span class="player-num">${i + 1}</span>
+        <input type="text" class="player-faction" id="opp-faction-${i}" placeholder="Army / Faction" list="faction-list" value="${escHTML(p.faction)}" />
+        <button type="button" class="btn-list-toggle" data-target="opp-list-${i}" title="Army List">&#9776;</button>
+      </div>
+      <div class="army-list-wrap" id="opp-list-wrap-${i}" style="display:none">
+        <textarea class="army-list-input" id="opp-list-${i}" placeholder="Paste army list here..." rows="8">${escHTML(p.armyList)}</textarea>
+      </div>
+    `;
+    container.appendChild(wrapper);
+  }
+
+  addListToggle(container);
+
+  container.addEventListener('input', () => collectPrepData());
+}
+
+function collectPrepData() {
+  if (!currentPrepCountry) return;
+  const opp = appState.opponents[currentPrepCountry];
+  for (let i = 0; i < 8; i++) {
+    const fEl = document.getElementById(`opp-faction-${i}`);
+    const lEl = document.getElementById(`opp-list-${i}`);
+    if (fEl) opp.players[i] = { faction: fEl.value.trim(), armyList: lEl ? lEl.value.trim() : '' };
+  }
+}
+
+function fillDummyOppTeam() {
+  if (!currentPrepCountry) return;
+  const factions = pickTeamFactions();
+  const opp = appState.opponents[currentPrepCountry];
+  for (let i = 0; i < 8; i++) {
+    opp.players[i] = { faction: factions[i], armyList: '' };
+  }
+  buildOppTeamInputs();
+  renderPrepMatrix();
+}
+
+function fillDummyPrepMatrix() {
+  if (!currentPrepCountry) return;
+  const opp = appState.opponents[currentPrepCountry];
+  opp.matchups = {};
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      const key = `${i}_${j}`;
+      opp.matchups[key] = { score: randomScore(), volatility: Math.random() < 0.1 ? 1 + Math.floor(Math.random() * 5) : 0 };
+    }
+  }
+  renderPrepMatrix();
+}
+
+// --- Prep Matrix ---
+
+function renderPrepMatrix() {
+  if (!currentPrepCountry) return;
+  const opp = appState.opponents[currentPrepCountry];
+  selectedMatrixCell = null;
+  buildMatrixDOM(
+    'matrix-thead', 'matrix-tbody', 'table-prefs-panel',
+    appState.myTeam.players, opp.players,
+    opp.matchups, opp.tablePrefs,
+    document.getElementById('prep-deployment').value,
+    'prep'
+  );
+}
+
+// ===========================
+// TAB 3: Play Round
+// ===========================
+
+function buildRoundUI() {
+  populateRoundDeployment();
+  populateRoundMissions();
+  populateRoundOpponents();
+
+  // Round selector
+  document.querySelectorAll('.round-num-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRoundIdx = parseInt(btn.dataset.round);
+      document.querySelectorAll('.round-num-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      showRoundConfig();
+    });
+  });
+
+  document.getElementById('round-deployment').addEventListener('change', updateTablesPreview);
+  document.getElementById('round-mission').addEventListener('change', () => {});
+  document.getElementById('round-opponent').addEventListener('change', onRoundOpponentChange);
+  document.getElementById('btn-randomize-round').addEventListener('click', randomizeRound);
+  document.getElementById('btn-load-prep').addEventListener('click', loadPrepIntoRound);
+  document.getElementById('btn-start-pairing').addEventListener('click', startPairing);
+  document.getElementById('btn-back-round-config').addEventListener('click', () => {
+    document.getElementById('round-config-area').style.display = '';
+    document.getElementById('round-pairing-area').style.display = 'none';
+  });
+  document.getElementById('btn-reset-pairing').addEventListener('click', () => startPairing());
+  document.getElementById('btn-round-algo').addEventListener('click', () => runOptimalPairing('round'));
+
+  showRoundConfig();
+}
+
+function populateRoundDeployment() {
+  const sel = document.getElementById('round-deployment');
+  sel.innerHTML = `
+    <option value="">— Select —</option>
+    ${WTC_DEPLOYMENTS.map(d => `<option value="${d}">${d}</option>`).join('')}
+    <optgroup label="BETA">
+      ${WTC_DEPLOYMENTS_BETA.map(d => `<option value="${d}">${d} (BETA)</option>`).join('')}
+    </optgroup>
+  `;
+}
+
+function populateRoundMissions() {
+  const sel = document.getElementById('round-mission');
+  sel.innerHTML = `
+    <option value="">— Select —</option>
     ${WTC_MISSIONS.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
   `;
+}
 
-  depSelect.addEventListener('change', updateTablesPreview);
-  missionSelect.addEventListener('change', updateTablesPreview);
+function populateRoundOpponents() {
+  const sel = document.getElementById('round-opponent');
+  sel.innerHTML = '<option value="">— Select Opponent —</option>';
+  const prepped = Object.keys(appState.opponents).sort();
+  prepped.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c + ' (prepped)';
+    sel.appendChild(opt);
+  });
+  // Manual entry option
+  const optManual = document.createElement('option');
+  optManual.value = '__manual__'; optManual.textContent = '+ Enter manually...';
+  sel.appendChild(optManual);
+}
 
+function onRoundOpponentChange() {
+  const val = document.getElementById('round-opponent').value;
+  const prefillBar = document.getElementById('round-prefill-bar');
+  if (val && val !== '__manual__' && appState.opponents[val]) {
+    prefillBar.style.display = '';
+  } else {
+    prefillBar.style.display = 'none';
+  }
+  if (val === '__manual__') {
+    const name = prompt('Enter opponent team name:');
+    if (name) {
+      // Add as a new opponent if not exists
+      if (!appState.opponents[name]) {
+        appState.opponents[name] = {
+          players: Array.from({ length: 8 }, () => ({ faction: '', armyList: '' })),
+          matchups: {}, tablePrefs: {},
+        };
+        saveState();
+      }
+      populateRoundOpponents();
+      document.getElementById('round-opponent').value = name;
+      onRoundOpponentChange();
+    }
+  }
+}
+
+function showRoundConfig() {
+  document.getElementById('round-config-area').style.display = '';
+  document.getElementById('round-pairing-area').style.display = 'none';
+  document.getElementById('round-title').textContent = `Round ${currentRoundIdx + 1} Setup`;
+
+  // If round already completed, show results
+  const rd = appState.rounds[currentRoundIdx];
+  if (rd && rd.completed) {
+    // Show completed state
+    document.getElementById('round-opponent').value = rd.opponent || '';
+    document.getElementById('round-deployment').value = rd.deployment || '';
+    document.getElementById('round-mission').value = rd.missionId || '';
+    updateTablesPreview();
+  }
+
+  // Refresh opponent dropdown
+  populateRoundOpponents();
+
+  // Build round matrix (empty or from saved round data)
+  buildRoundMatrix();
+
+  // Update round buttons with completion status
+  updateRoundButtons();
+}
+
+function updateRoundButtons() {
+  document.querySelectorAll('.round-num-btn').forEach(btn => {
+    const idx = parseInt(btn.dataset.round);
+    const rd = appState.rounds[idx];
+    btn.classList.toggle('round-completed', !!(rd && rd.completed));
+    btn.classList.toggle('active', idx === currentRoundIdx);
+  });
+}
+
+function loadPrepIntoRound() {
+  const oppName = document.getElementById('round-opponent').value;
+  if (!oppName || !appState.opponents[oppName]) return;
+
+  const opp = appState.opponents[oppName];
+  roundMatchupScores = {};
+  roundMatchupVolatility = {};
+  roundMatchupTablePrefs = {};
+
+  Object.entries(opp.matchups).forEach(([key, val]) => {
+    const aKey = `a${key.split('_')[0]}_b${key.split('_')[1]}`;
+    roundMatchupScores[aKey] = val.score;
+    if (val.volatility) roundMatchupVolatility[aKey] = val.volatility;
+  });
+  Object.entries(opp.tablePrefs || {}).forEach(([key, val]) => {
+    const aKey = `a${key.split('_')[0]}_b${key.split('_')[1]}`;
+    roundMatchupTablePrefs[aKey] = { ...val };
+  });
+
+  buildRoundMatrix();
+}
+
+function buildRoundMatrix() {
+  collectMyTeam();
+  const oppName = document.getElementById('round-opponent').value;
+  let oppPlayers = Array.from({ length: 8 }, () => ({ faction: '?' }));
+  if (oppName && appState.opponents[oppName]) {
+    oppPlayers = appState.opponents[oppName].players;
+  }
+
+  buildMatrixDOM(
+    'round-matrix-thead', 'round-matrix-tbody', 'round-table-prefs-panel',
+    appState.myTeam.players, oppPlayers,
+    roundMatchupScores, roundMatchupTablePrefs,
+    document.getElementById('round-deployment').value,
+    'round'
+  );
+}
+
+function randomizeRound() {
+  const allDeps = [...WTC_DEPLOYMENTS];
+  document.getElementById('round-deployment').value = allDeps[Math.floor(Math.random() * allDeps.length)];
+  const missions = [...WTC_MISSIONS];
+  document.getElementById('round-mission').value = missions[Math.floor(Math.random() * missions.length)].id;
   updateTablesPreview();
 }
 
@@ -724,7 +496,6 @@ function updateTablesPreview() {
   const dep = document.getElementById('round-deployment').value;
   const grid = document.getElementById('tables-grid');
   grid.innerHTML = '';
-
   const maps = dep ? WTC_MAPS[dep] : null;
 
   for (let i = 0; i < 8; i++) {
@@ -741,120 +512,231 @@ function updateTablesPreview() {
   }
 }
 
-function randomizeRound() {
-  const allDeps = [...WTC_DEPLOYMENTS];
-  const dep = allDeps[Math.floor(Math.random() * allDeps.length)];
-  document.getElementById('round-deployment').value = dep;
+// ===========================
+// Generic Matrix Builder
+// ===========================
 
-  const missions = [...WTC_MISSIONS];
-  const mission = missions[Math.floor(Math.random() * missions.length)];
-  document.getElementById('round-mission').value = mission.id;
+function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scores, tablePrefs, deployment, context) {
+  const thead = document.getElementById(theadId);
+  const tbody = document.getElementById(tbodyId);
 
-  updateTablesPreview();
-}
+  // For 'prep' context, scores = { '0_0': { score, volatility } }
+  // For 'round' context, scores = { 'a0_b0': score }, separate volatility obj
 
-// --- Navigation ---
+  let headerHTML = '<tr><th class="matrix-corner"></th>';
+  for (let j = 0; j < 8; j++) {
+    const f = oppPlayers[j]?.faction || '?';
+    headerHTML += `<th class="col-header team-b-color" title="${escHTML(f)}">${escHTML(f)}</th>`;
+  }
+  headerHTML += '</tr>';
+  thead.innerHTML = headerHTML;
 
-function bindNavigation() {
-  document.querySelectorAll('.phase-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const phase = btn.dataset.phase;
-      showPhase(phase);
+  let bodyHTML = '';
+  for (let i = 0; i < 8; i++) {
+    const f = myPlayers[i]?.faction || '?';
+    bodyHTML += `<tr><th class="row-header team-a-color" title="${escHTML(f)}">${escHTML(f)}</th>`;
+    for (let j = 0; j < 8; j++) {
+      let key, score, vol;
+      if (context === 'prep') {
+        key = `${i}_${j}`;
+        const m = scores[key];
+        score = m ? m.score : '';
+        vol = m ? (m.volatility || '') : '';
+      } else {
+        key = `a${i}_b${j}`;
+        score = scores[key] !== undefined ? scores[key] : '';
+        vol = roundMatchupVolatility[key] !== undefined ? roundMatchupVolatility[key] : '';
+      }
+      const cls = getMatrixCellClass(score);
+      const hasTP = tablePrefs[context === 'prep' ? `${i}_${j}` : key] &&
+                    Object.keys(tablePrefs[context === 'prep' ? `${i}_${j}` : key]).length > 0;
+      const tpDot = hasTP ? '<span class="tp-dot" title="Has table preferences">&#9679;</span>' : '';
+      const dataKey = context === 'prep' ? `${i}_${j}` : `a${i}_b${j}`;
+
+      bodyHTML += `<td class="${cls}" data-key="${dataKey}" data-ctx="${context}">
+        <div class="cell-inputs">
+          <input type="number" class="matrix-input" data-key="${dataKey}" data-ctx="${context}" min="0" max="20" value="${score}" placeholder="—" title="Expected score (0-20)">
+          <input type="number" class="matrix-vol" data-key="${dataKey}" data-ctx="${context}" min="0" max="5" value="${vol}" placeholder="± vol" title="Volatility (0-5)">
+        </div>
+        ${tpDot}
+      </td>`;
+    }
+    bodyHTML += '</tr>';
+  }
+  tbody.innerHTML = bodyHTML;
+
+  // Score handlers
+  tbody.querySelectorAll('.matrix-input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      let val = e.target.value.trim();
+      const k = e.target.dataset.key;
+      const ctx = e.target.dataset.ctx;
+      if (val === '') {
+        if (ctx === 'prep' && currentPrepCountry) { delete appState.opponents[currentPrepCountry].matchups[k]; }
+        else { delete roundMatchupScores[k]; }
+      } else {
+        val = Math.max(0, Math.min(20, parseInt(val) || 0));
+        e.target.value = val;
+        if (ctx === 'prep' && currentPrepCountry) {
+          if (!appState.opponents[currentPrepCountry].matchups[k]) appState.opponents[currentPrepCountry].matchups[k] = {};
+          appState.opponents[currentPrepCountry].matchups[k].score = val;
+        } else {
+          roundMatchupScores[k] = val;
+        }
+      }
+      updateCellColor(e.target.closest('td'), val);
+    });
+  });
+
+  // Vol handlers
+  tbody.querySelectorAll('.matrix-vol').forEach(input => {
+    input.addEventListener('input', (e) => {
+      let val = e.target.value.trim();
+      const k = e.target.dataset.key;
+      const ctx = e.target.dataset.ctx;
+      if (val === '') {
+        if (ctx === 'prep' && currentPrepCountry) {
+          if (appState.opponents[currentPrepCountry].matchups[k]) appState.opponents[currentPrepCountry].matchups[k].volatility = 0;
+        } else { delete roundMatchupVolatility[k]; }
+      } else {
+        val = Math.max(0, Math.min(5, parseInt(val) || 0));
+        e.target.value = val;
+        if (ctx === 'prep' && currentPrepCountry) {
+          if (!appState.opponents[currentPrepCountry].matchups[k]) appState.opponents[currentPrepCountry].matchups[k] = {};
+          appState.opponents[currentPrepCountry].matchups[k].volatility = val;
+        } else {
+          roundMatchupVolatility[k] = val;
+        }
+      }
+    });
+  });
+
+  // Cell click
+  tbody.querySelectorAll('td[data-key]').forEach(td => {
+    td.addEventListener('click', () => {
+      const k = td.dataset.key;
+      selectedMatrixCell = selectedMatrixCell === k ? null : k;
+      tbody.querySelectorAll('td[data-key]').forEach(c => c.classList.toggle('matrix-cell-selected', c.dataset.key === selectedMatrixCell));
+      renderTablePrefsPanel(tpPanelId, myPlayers, oppPlayers, tablePrefs, deployment, context);
     });
   });
 }
 
-function showPhase(phaseName) {
-  document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.phase-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`phase-${phaseName}`).classList.add('active');
-  document.querySelector(`[data-phase="${phaseName}"]`).classList.add('active');
+function updateCellColor(td, val) {
+  const cls = getMatrixCellClass(val);
+  const wasSel = td.classList.contains('matrix-cell-selected');
+  td.className = cls + (wasSel ? ' matrix-cell-selected' : '');
 }
 
-function bindPhaseActions() {
-  document.getElementById('btn-fill-dummy').addEventListener('click', fillDummyTeams);
-  document.getElementById('btn-fill-matrix').addEventListener('click', fillDummyMatrix);
-  document.getElementById('btn-run-algo').addEventListener('click', runOptimalPairing);
-  document.getElementById('btn-randomize-tables').addEventListener('click', randomizeRound);
-  document.getElementById('btn-to-pairing').addEventListener('click', () => {
-    if (collectTeamData() && collectTableData()) {
-      startPairing();
-      showPhase('pairing');
-    }
-  });
-  document.getElementById('btn-back-setup').addEventListener('click', () => showPhase('setup'));
-  document.getElementById('btn-reset-pairing').addEventListener('click', () => {
-    startPairing();
-  });
-  document.getElementById('btn-back-pairing').addEventListener('click', () => showPhase('pairing'));
-  document.getElementById('btn-new-round').addEventListener('click', () => {
-    showPhase('setup');
-  });
+function getMatrixCellClass(val) {
+  if (val === '' || val === undefined || val === null) return 'matrix-cell-empty';
+  const v = parseInt(val);
+  if (isNaN(v)) return 'matrix-cell-empty';
+  if (v <= 2) return 'matrix-cell-brown';
+  if (v <= 7) return 'matrix-cell-red';
+  if (v <= 12) return 'matrix-cell-yellow';
+  if (v <= 17) return 'matrix-cell-green';
+  return 'matrix-cell-blue';
 }
 
-// --- Data Collection ---
+function renderTablePrefsPanel(panelId, myPlayers, oppPlayers, tablePrefs, deployment, context) {
+  const panel = document.getElementById(panelId);
+  if (!selectedMatrixCell) { panel.style.display = 'none'; return; }
 
-function collectTeamData() {
-  teamAData = [];
-  teamBData = [];
-
-  for (let i = 0; i < 8; i++) {
-    const factionA = document.getElementById(`a-faction-${i}`).value.trim() || 'Unknown';
-    const listA = document.getElementById(`a-list-${i}`).value.trim();
-    teamAData.push({ id: `a${i}`, faction: factionA, armyList: listA });
-
-    const factionB = document.getElementById(`b-faction-${i}`).value.trim() || 'Unknown';
-    const listB = document.getElementById(`b-list-${i}`).value.trim();
-    teamBData.push({ id: `b${i}`, faction: factionB, armyList: listB });
+  const key = selectedMatrixCell;
+  let aIdx, bIdx;
+  if (context === 'prep') {
+    [aIdx, bIdx] = key.split('_').map(Number);
+  } else {
+    [aIdx, bIdx] = key.replace('a','').split('_b').map(Number);
   }
 
-  return true;
+  const prefs = tablePrefs[key] || {};
+  const maps = deployment ? WTC_MAPS[deployment] : null;
+
+  let html = `
+    <div class="tp-header">
+      <span class="team-a-color">${escHTML(myPlayers[aIdx]?.faction || '?')}</span>
+      <span class="tp-vs">vs</span>
+      <span class="team-b-color">${escHTML(oppPlayers[bIdx]?.faction || '?')}</span>
+      <span class="tp-label">— Table Preferences</span>
+    </div>
+    <div class="tp-buttons">
+  `;
+
+  for (let t = 0; t < 8; t++) {
+    const pref = prefs[t] || 'neutral';
+    const mapIdx = WTC_TABLE_MAP_INDICES[t];
+    const mapEntry = maps ? maps[mapIdx] : null;
+    const mapName = mapEntry ? mapEntry.name : `Table ${t + 1}`;
+    const mapId = mapEntry ? mapEntry.id : null;
+    html += `
+      <button class="tp-btn tp-${pref}" data-table="${t}" data-key="${key}" title="${mapName}">
+        <strong>T${t + 1}</strong>
+        <small>${mapId ? mapNameHTML(mapId, mapName) : mapName}</small>
+        <span class="tp-state">${pref === 'good' ? '✓' : pref === 'bad' ? '✗' : '—'}</span>
+      </button>
+    `;
+  }
+
+  html += `</div><p class="tp-hint">Click to cycle: neutral → good → bad → neutral</p>`;
+  panel.innerHTML = html;
+  panel.style.display = '';
+
+  panel.querySelectorAll('.tp-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = parseInt(btn.dataset.table);
+      const k = btn.dataset.key;
+      if (!tablePrefs[k]) tablePrefs[k] = {};
+      const current = tablePrefs[k][t] || 'neutral';
+      const next = current === 'neutral' ? 'good' : current === 'good' ? 'bad' : 'neutral';
+      if (next === 'neutral') { delete tablePrefs[k][t]; } else { tablePrefs[k][t] = next; }
+      renderTablePrefsPanel(panelId, myPlayers, oppPlayers, tablePrefs, deployment, context);
+    });
+  });
 }
 
-function collectTableData() {
+// ===========================
+// Pairing Process
+// ===========================
+
+function startPairing() {
+  collectMyTeam();
+  const oppName = document.getElementById('round-opponent').value;
   const dep = document.getElementById('round-deployment').value;
   const missionId = document.getElementById('round-mission').value;
 
-  if (!dep) {
-    alert('Please select a deployment zone.');
-    return false;
-  }
-  if (!missionId) {
-    alert('Please select a mission.');
-    return false;
+  if (!dep) { showToast('Please select a deployment zone.'); return; }
+  if (!missionId) { showToast('Please select a mission.'); return; }
+
+  let oppPlayers = Array.from({ length: 8 }, (_, i) => ({ faction: `Opp ${i+1}` }));
+  if (oppName && appState.opponents[oppName]) {
+    oppPlayers = appState.opponents[oppName].players;
   }
 
-  roundDeployment = dep;
-  roundMission = WTC_MISSIONS.find(m => m.id === missionId)?.name || missionId;
+  teamAData = appState.myTeam.players.map((p, i) => ({
+    id: `a${i}`, faction: p.faction || `Army ${i+1}`, armyList: p.armyList,
+  }));
+  teamBData = oppPlayers.map((p, i) => ({
+    id: `b${i}`, faction: p.faction || `Opp ${i+1}`, armyList: p.armyList || '',
+  }));
 
   const maps = WTC_MAPS[dep];
   tablesData = [];
-
+  const missionName = WTC_MISSIONS.find(m => m.id === missionId)?.name || missionId;
   for (let i = 0; i < 8; i++) {
     const mapIdx = WTC_TABLE_MAP_INDICES[i];
     const map = maps[mapIdx];
-    tablesData.push({
-      index: i,
-      deployment: dep,
-      map: map.name,
-      mapId: map.id,
-      mission: roundMission,
-      missionId: missionId,
-    });
+    tablesData.push({ index: i, deployment: dep, map: map.name, mapId: map.id, mission: missionName, missionId });
   }
 
-  return true;
-}
-
-// --- Pairing Process ---
-
-function startPairing() {
   engine = new PairingEngine(teamAData, teamBData, tablesData);
 
-  document.getElementById('board-team-a-name').textContent =
-    document.getElementById('team-a-name').value || 'Team A';
-  document.getElementById('board-team-b-name').textContent =
-    document.getElementById('team-b-name').value || 'Team B';
+  document.getElementById('board-team-a-name').textContent = appState.myTeam.name || 'My Team';
+  document.getElementById('board-team-b-name').textContent = oppName || 'Opponent';
+
+  document.getElementById('round-config-area').style.display = 'none';
+  document.getElementById('round-pairing-area').style.display = '';
 
   buildMatrixReference();
   renderPairingState();
@@ -863,18 +745,46 @@ function startPairing() {
 function renderPairingState() {
   const state = engine.getState();
   const prompt = engine.getCurrentPrompt();
-
   updateStepTitle(state, prompt);
   renderMatches(state);
   renderPools(state);
   renderTableChoiceToken(state);
   renderActionPanel(prompt, state);
+
+  // If complete, save round results
+  if (state.isComplete) {
+    saveRoundResults();
+  }
+}
+
+function saveRoundResults() {
+  const oppName = document.getElementById('round-opponent').value;
+  const dep = document.getElementById('round-deployment').value;
+  const missionId = document.getElementById('round-mission').value;
+
+  appState.rounds[currentRoundIdx] = {
+    opponent: oppName,
+    deployment: dep,
+    missionId: missionId,
+    missionName: WTC_MISSIONS.find(m => m.id === missionId)?.name || missionId,
+    matches: engine.matches.map(m => ({
+      playerA: m.playerA,
+      playerB: m.playerB,
+      table: m.table,
+      type: m.type,
+      factionA: engine.getPlayer(m.playerA)?.faction,
+      factionB: engine.getPlayer(m.playerB)?.faction,
+    })),
+    log: engine.log,
+    completed: true,
+  };
+  saveState();
+  updateRoundButtons();
 }
 
 function updateStepTitle(state, prompt) {
   const titleEl = document.getElementById('pairing-step-title');
   const descEl = document.getElementById('pairing-step-desc');
-
   const stepNames = {
     'choose_defenders': 'Choose Defenders',
     'choose_attackers': 'Choose Attackers',
@@ -887,7 +797,6 @@ function updateStepTitle(state, prompt) {
     'r3_choose_tables': 'Assign Tables',
     'complete': 'Complete!',
   };
-
   titleEl.textContent = `Pairing Round ${state.round} — ${stepNames[state.step] || state.step}`;
   descEl.textContent = prompt.description || '';
 }
@@ -895,18 +804,14 @@ function updateStepTitle(state, prompt) {
 function renderMatches(state) {
   const container = document.getElementById('board-matches');
   container.innerHTML = '';
-
   state.matches.forEach((match, idx) => {
     const pA = engine.getPlayer(match.playerA);
     const pB = engine.getPlayer(match.playerB);
     const tableInfo = match.table !== null ? tablesData[match.table] : null;
-
     const row = document.createElement('div');
     row.className = 'match-row';
     row.innerHTML = `
-      <div class="match-player team-a-bg">
-        <strong>${playerHTML(match.playerA, pA.faction)}</strong>
-      </div>
+      <div class="match-player team-a-bg"><strong>${playerHTML(match.playerA, pA.faction)}</strong></div>
       <div class="match-info">
         <div class="match-number">#${idx + 1}</div>
         ${tableInfo ? `
@@ -915,24 +820,18 @@ function renderMatches(state) {
         ` : '<div class="match-table pending">Table TBD</div>'}
         <div class="match-type">${match.type.replace(/_/g, ' ')}</div>
       </div>
-      <div class="match-player team-b-bg">
-        <strong>${playerHTML(match.playerB, pB.faction)}</strong>
-      </div>
+      <div class="match-player team-b-bg"><strong>${playerHTML(match.playerB, pB.faction)}</strong></div>
     `;
     container.appendChild(row);
   });
 }
 
 function renderPools(state) {
-  const poolAEl = document.getElementById('pool-a');
-  const poolBEl = document.getElementById('pool-b');
-
-  poolAEl.innerHTML = state.poolA.map(id => {
+  document.getElementById('pool-a').innerHTML = state.poolA.map(id => {
     const p = engine.getPlayer(id);
     return `<div class="pool-player team-a-bg" data-id="${id}"><strong>${playerHTML(id, p.faction)}</strong></div>`;
   }).join('');
-
-  poolBEl.innerHTML = state.poolB.map(id => {
+  document.getElementById('pool-b').innerHTML = state.poolB.map(id => {
     const p = engine.getPlayer(id);
     return `<div class="pool-player team-b-bg" data-id="${id}"><strong>${playerHTML(id, p.faction)}</strong></div>`;
   }).join('');
@@ -943,68 +842,48 @@ function renderTableChoiceToken(state) {
   const span = document.getElementById('table-choice-team');
   if (state.tableChoiceToken) {
     section.style.display = '';
-    const teamName = state.tableChoiceToken === 'A'
-      ? (document.getElementById('team-a-name').value || 'Team A')
-      : (document.getElementById('team-b-name').value || 'Team B');
-    span.textContent = teamName;
+    const name = state.tableChoiceToken === 'A'
+      ? (appState.myTeam.name || 'My Team')
+      : (document.getElementById('round-opponent').value || 'Opponent');
+    span.textContent = name;
     span.className = state.tableChoiceToken === 'A' ? 'team-a-color' : 'team-b-color';
   } else {
     section.style.display = 'none';
   }
 }
 
-// --- Action Panel Rendering ---
+// --- Action Panel ---
 
 function renderActionPanel(prompt, state) {
-  // Clone and replace the panel to remove ALL stale event listeners
   const oldPanel = document.getElementById('action-content');
   const panel = oldPanel.cloneNode(false);
   oldPanel.parentNode.replaceChild(panel, oldPanel);
 
   switch (prompt.type) {
-    case 'dual_select':
-      renderDualSelect(panel, prompt);
-      break;
-    case 'dual_select_multi':
-      renderDualSelectMulti(panel, prompt);
-      break;
-    case 'roll_off':
-      renderRollOff(panel, prompt);
-      break;
+    case 'dual_select': renderDualSelect(panel, prompt); break;
+    case 'dual_select_multi': renderDualSelectMulti(panel, prompt); break;
+    case 'roll_off': renderRollOff(panel, prompt); break;
     case 'sequential_table_select':
-    case 'sequential_table_select_r3':
-      renderTableSelect(panel, prompt, state);
-      break;
-    case 'complete':
-      renderComplete(panel, prompt);
-      break;
-    default:
-      panel.innerHTML = `<p>Unknown step</p>`;
+    case 'sequential_table_select_r3': renderTableSelect(panel, prompt, state); break;
+    case 'complete': renderComplete(panel, prompt); break;
+    default: panel.innerHTML = '<p>Unknown step</p>';
   }
 }
 
 function renderDualSelect(panel, prompt) {
-  let selectedA = null;
-  let selectedB = null;
-
-  const html = `
+  let selectedA = null, selectedB = null;
+  panel.innerHTML = `
     <div class="dual-panels">
       <div class="select-panel team-a-panel">
         <h3>${prompt.titleA}</h3>
         <div class="select-options" id="sel-a">
-          ${prompt.optionsA.map(id => {
-            const p = engine.getPlayer(id);
-            return `<button class="sel-btn" data-id="${id}">${p.faction}</button>`;
-          }).join('')}
+          ${prompt.optionsA.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
         </div>
       </div>
       <div class="select-panel team-b-panel">
         <h3>${prompt.titleB}</h3>
         <div class="select-options" id="sel-b">
-          ${prompt.optionsB.map(id => {
-            const p = engine.getPlayer(id);
-            return `<button class="sel-btn" data-id="${id}">${p.faction}</button>`;
-          }).join('')}
+          ${prompt.optionsB.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
         </div>
       </div>
     </div>
@@ -1014,31 +893,22 @@ function renderDualSelect(panel, prompt) {
     </div>
   `;
 
-  panel.innerHTML = html;
-
   panel.querySelectorAll('#sel-a .sel-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       panel.querySelectorAll('#sel-a .sel-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       selectedA = btn.dataset.id;
-      checkReady();
+      if (selectedA && selectedB) document.getElementById('reveal-section').style.display = '';
     });
   });
-
   panel.querySelectorAll('#sel-b .sel-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       panel.querySelectorAll('#sel-b .sel-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       selectedB = btn.dataset.id;
-      checkReady();
+      if (selectedA && selectedB) document.getElementById('reveal-section').style.display = '';
     });
   });
-
-  function checkReady() {
-    if (selectedA && selectedB) {
-      document.getElementById('reveal-section').style.display = '';
-    }
-  }
 
   panel.addEventListener('click', (e) => {
     if (e.target.id === 'btn-reveal' || e.target.closest('#btn-reveal')) {
@@ -1050,39 +920,28 @@ function renderDualSelect(panel, prompt) {
         input = { refuseA: selectedA, refuseB: selectedB };
       }
       const result = engine.processInput(input);
-      if (result.success) {
-        renderPairingState();
-      } else {
-        alert(result.error);
-      }
+      if (result.success) renderPairingState();
+      else showToast(result.error);
     }
   });
 }
 
 function renderDualSelectMulti(panel, prompt) {
-  let selectedA = [];
-  let selectedB = [];
-
-  const html = `
+  let selectedA = [], selectedB = [];
+  panel.innerHTML = `
     <div class="dual-panels">
       <div class="select-panel team-a-panel">
         <h3>${prompt.titleA}</h3>
         <p class="sel-hint">Select ${prompt.count} players</p>
         <div class="select-options" id="sel-a">
-          ${prompt.optionsA.map(id => {
-            const p = engine.getPlayer(id);
-            return `<button class="sel-btn" data-id="${id}">${p.faction}</button>`;
-          }).join('')}
+          ${prompt.optionsA.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
         </div>
       </div>
       <div class="select-panel team-b-panel">
         <h3>${prompt.titleB}</h3>
         <p class="sel-hint">Select ${prompt.count} players</p>
         <div class="select-options" id="sel-b">
-          ${prompt.optionsB.map(id => {
-            const p = engine.getPlayer(id);
-            return `<button class="sel-btn" data-id="${id}">${p.faction}</button>`;
-          }).join('')}
+          ${prompt.optionsB.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
         </div>
       </div>
     </div>
@@ -1092,60 +951,40 @@ function renderDualSelectMulti(panel, prompt) {
     </div>
   `;
 
-  panel.innerHTML = html;
+  const checkReady = () => {
+    document.getElementById('reveal-section').style.display =
+      (selectedA.length === prompt.count && selectedB.length === prompt.count) ? '' : 'none';
+  };
 
   panel.querySelectorAll('#sel-a .sel-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
-      if (selectedA.includes(id)) {
-        selectedA = selectedA.filter(x => x !== id);
-        btn.classList.remove('selected');
-      } else if (selectedA.length < prompt.count) {
-        selectedA.push(id);
-        btn.classList.add('selected');
-      }
+      if (selectedA.includes(id)) { selectedA = selectedA.filter(x => x !== id); btn.classList.remove('selected'); }
+      else if (selectedA.length < prompt.count) { selectedA.push(id); btn.classList.add('selected'); }
       checkReady();
     });
   });
-
   panel.querySelectorAll('#sel-b .sel-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
-      if (selectedB.includes(id)) {
-        selectedB = selectedB.filter(x => x !== id);
-        btn.classList.remove('selected');
-      } else if (selectedB.length < prompt.count) {
-        selectedB.push(id);
-        btn.classList.add('selected');
-      }
+      if (selectedB.includes(id)) { selectedB = selectedB.filter(x => x !== id); btn.classList.remove('selected'); }
+      else if (selectedB.length < prompt.count) { selectedB.push(id); btn.classList.add('selected'); }
       checkReady();
     });
   });
-
-  function checkReady() {
-    if (selectedA.length === prompt.count && selectedB.length === prompt.count) {
-      document.getElementById('reveal-section').style.display = '';
-    } else {
-      document.getElementById('reveal-section').style.display = 'none';
-    }
-  }
 
   panel.addEventListener('click', (e) => {
     if (e.target.id === 'btn-reveal' || e.target.closest('#btn-reveal')) {
       const result = engine.processInput({ attackersA: selectedA, attackersB: selectedB });
-      if (result.success) {
-        renderPairingState();
-      } else {
-        alert(result.error);
-      }
+      if (result.success) renderPairingState();
+      else showToast(result.error);
     }
   });
 }
 
 function renderRollOff(panel, prompt) {
-  const teamAName = document.getElementById('team-a-name').value || 'Team A';
-  const teamBName = document.getElementById('team-b-name').value || 'Team B';
-
+  const teamAName = appState.myTeam.name || 'My Team';
+  const teamBName = document.getElementById('round-opponent').value || 'Opponent';
   panel.innerHTML = `
     <div class="roll-off-section">
       <h3>Roll Off for Table Choice Token</h3>
@@ -1156,30 +995,15 @@ function renderRollOff(panel, prompt) {
       </div>
     </div>
   `;
-
-  document.getElementById('roll-a').addEventListener('click', () => {
-    engine.processInput({ winner: 'A' });
-    renderPairingState();
-  });
-
-  document.getElementById('roll-b').addEventListener('click', () => {
-    engine.processInput({ winner: 'B' });
-    renderPairingState();
-  });
+  document.getElementById('roll-a').addEventListener('click', () => { engine.processInput({ winner: 'A' }); renderPairingState(); });
+  document.getElementById('roll-b').addEventListener('click', () => { engine.processInput({ winner: 'B' }); renderPairingState(); });
 }
 
 function renderTableSelect(panel, prompt, state) {
-  // Get pending matches directly from engine (not state copies)
   const pendingMatches = engine.matches.filter(m => m.table === null);
   const available = [...engine.availableTables];
+  if (pendingMatches.length === 0) { engine.processInput({ tableAssignments: [] }); renderPairingState(); return; }
 
-  if (pendingMatches.length === 0) {
-    engine.processInput({ tableAssignments: [] });
-    renderPairingState();
-    return;
-  }
-
-  // Order: token holder's defender first
   const orderedMatches = [...pendingMatches];
   if (prompt.firstTeam) {
     orderedMatches.sort((a, b) => {
@@ -1190,28 +1014,23 @@ function renderTableSelect(panel, prompt, state) {
   }
 
   let assignments = [];
-
   const buildUI = () => {
     const assignedTables = assignments.map(a => a.tableIndex);
     const remainingTables = available.filter(t => !assignedTables.includes(t));
     const currentMatchIdx = assignments.length;
-
     if (currentMatchIdx >= orderedMatches.length) {
       const finalAssignments = orderedMatches.map((match, i) => ({
-        matchIndex: engine.matches.indexOf(match),
-        tableIndex: assignments[i].tableIndex,
+        matchIndex: engine.matches.indexOf(match), tableIndex: assignments[i].tableIndex,
       }));
       engine.processInput({ tableAssignments: finalAssignments });
       renderPairingState();
       return;
     }
-
     const currentMatch = orderedMatches[currentMatchIdx];
     const pA = engine.getPlayer(currentMatch.playerA);
     const pB = engine.getPlayer(currentMatch.playerB);
     const matchNum = engine.matches.indexOf(currentMatch) + 1;
-
-    const whoChooses = currentMatch.defenderTeam === prompt.firstTeam ? 'Token holder\'s defender' : 'Other defender';
+    const whoChooses = currentMatch.defenderTeam === prompt.firstTeam ? "Token holder's defender" : 'Other defender';
 
     panel.innerHTML = `
       <div class="table-select-section">
@@ -1228,15 +1047,10 @@ function renderTableSelect(panel, prompt, state) {
         </div>
       </div>
     `;
-
     panel.querySelectorAll('.table-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        assignments.push({ tableIndex: parseInt(btn.dataset.table) });
-        buildUI();
-      });
+      btn.addEventListener('click', () => { assignments.push({ tableIndex: parseInt(btn.dataset.table) }); buildUI(); });
     });
   };
-
   buildUI();
 }
 
@@ -1244,140 +1058,338 @@ function renderComplete(panel, prompt) {
   panel.innerHTML = `
     <div class="complete-section">
       <h3>All 8 Pairings Complete!</h3>
-      <button class="btn btn-primary" id="btn-view-results">View Results Summary</button>
+      <p style="color:var(--text-secondary);margin-bottom:16px;">Round ${currentRoundIdx + 1} results have been saved.</p>
+      <button class="btn btn-primary" id="btn-view-overview">View Tournament Overview</button>
     </div>
   `;
-
-  document.getElementById('btn-view-results').addEventListener('click', () => {
-    renderResults();
-    showPhase('results');
+  document.getElementById('btn-view-overview').addEventListener('click', () => {
+    renderOverview();
+    showPhase('overview');
   });
 }
 
-// --- Results ---
+// --- Matrix Reference ---
 
-function renderResults() {
-  const container = document.getElementById('results-content');
-  const state = engine.getState();
-  const teamAName = document.getElementById('team-a-name').value || 'Team A';
-  const teamBName = document.getElementById('team-b-name').value || 'Team B';
+function buildMatrixReference() {
+  const body = document.getElementById('matrix-ref-body');
+  if (!teamAData.length || !teamBData.length) { body.innerHTML = '<p style="color:var(--text-muted)">No data.</p>'; return; }
 
-  let html = `
-    <div class="results-header">
-      <div class="team-a-color"><strong>${teamAName}</strong></div>
-      <div>vs</div>
-      <div class="team-b-color"><strong>${teamBName}</strong></div>
-    </div>
-    <div class="round-info-bar">
-      <span>Deployment: <strong>${roundDeployment}</strong></span>
-      <span>Mission: <strong>${roundMission}</strong></span>
-    </div>
-    <div class="results-table">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Table</th>
-            <th>Map</th>
-            <th>${teamAName}</th>
-            <th>vs</th>
-            <th>${teamBName}</th>
-            <th>Type</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
+  let html = `<div class="matrix-legend">
+    <span class="legend-item legend-brown">0-2</span>
+    <span class="legend-item legend-red">3-7</span>
+    <span class="legend-item legend-yellow">8-12</span>
+    <span class="legend-item legend-green">13-17</span>
+    <span class="legend-item legend-blue">18-20</span>
+  </div><table class="matchup-matrix"><thead><tr><th></th>`;
 
-  const sorted = [...state.matches].sort((a, b) => (a.table || 0) - (b.table || 0));
+  teamBData.forEach(p => { html += `<th class="col-header team-b-color">${escHTML(p.faction)}</th>`; });
+  html += '</tr></thead><tbody>';
 
-  sorted.forEach((match, i) => {
-    const pA = engine.getPlayer(match.playerA);
-    const pB = engine.getPlayer(match.playerB);
-    const table = tablesData[match.table];
-    html += `
-      <tr>
-        <td>${i + 1}</td>
-        <td>Table ${match.table + 1}</td>
-        <td>${table ? mapNameHTML(table.mapId, table.map) : '—'}</td>
-        <td class="team-a-cell">${playerHTML(match.playerA, pA.faction)}</td>
-        <td class="vs-cell">vs</td>
-        <td class="team-b-cell">${playerHTML(match.playerB, pB.faction)}</td>
-        <td><span class="type-badge">${match.type.replace(/_/g, ' ')}</span></td>
-      </tr>
-    `;
+  teamAData.forEach((pA, i) => {
+    html += `<tr><th class="row-header team-a-color">${escHTML(pA.faction)}</th>`;
+    teamBData.forEach((pB, j) => {
+      const key = `a${i}_b${j}`;
+      const val = roundMatchupScores[key];
+      const vol = roundMatchupVolatility[key];
+      const cls = getMatrixCellClass(val);
+      html += `<td class="${cls}" style="font-weight:700;text-align:center">${val !== undefined ? val : '—'}${vol ? `<small class="ref-vol">±${vol}</small>` : ''}</td>`;
+    });
+    html += '</tr>';
   });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
 
-  html += `</tbody></table></div>`;
+// ===========================
+// TAB 4: Overview
+// ===========================
 
-  html += `
-    <div class="event-log">
-      <h3>Pairing Log</h3>
-      <div class="log-entries">
-        ${state.log.map(entry => `<div class="log-entry">${entry}</div>`).join('')}
-      </div>
-    </div>
-  `;
+function renderOverview() {
+  const container = document.getElementById('overview-content');
+  let html = '<div class="overview-rounds">';
 
+  for (let r = 0; r < 7; r++) {
+    const rd = appState.rounds[r];
+    html += `<div class="overview-round-card ${rd && rd.completed ? 'completed' : 'pending'}">
+      <h3>Round ${r + 1}</h3>`;
+
+    if (rd && rd.completed) {
+      html += `
+        <div class="overview-meta">
+          <span>vs <strong>${escHTML(rd.opponent || '?')}</strong></span>
+          <span>${escHTML(rd.deployment || '')}</span>
+          <span>${escHTML(rd.missionName || '')}</span>
+        </div>
+        <table class="overview-match-table">
+          <thead><tr><th>#</th><th>Table</th><th>${escHTML(appState.myTeam.name || 'My Team')}</th><th>vs</th><th>${escHTML(rd.opponent || 'Opp')}</th><th>Type</th></tr></thead>
+          <tbody>
+      `;
+      const sorted = [...rd.matches].sort((a, b) => (a.table || 0) - (b.table || 0));
+      sorted.forEach((m, i) => {
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td>T${(m.table || 0) + 1}</td>
+          <td class="team-a-cell">${escHTML(m.factionA || '?')}</td>
+          <td class="vs-cell">vs</td>
+          <td class="team-b-cell">${escHTML(m.factionB || '?')}</td>
+          <td><span class="type-badge">${(m.type || '').replace(/_/g, ' ')}</span></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<p class="overview-pending">Not yet played</p>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
   container.innerHTML = html;
 }
 
-// --- Map Tooltip ---
+// ===========================
+// Optimal Pairing Algorithm
+// ===========================
+
+function runOptimalPairing(context) {
+  const resultsElId = context === 'prep' ? 'algorithm-results' : 'round-algorithm-results';
+  const resultsEl = document.getElementById(resultsElId);
+
+  let S = [], V = [], myP, oppP;
+  if (context === 'prep') {
+    if (!currentPrepCountry) return;
+    const opp = appState.opponents[currentPrepCountry];
+    myP = appState.myTeam.players;
+    oppP = opp.players;
+    for (let i = 0; i < 8; i++) {
+      S[i] = []; V[i] = [];
+      for (let j = 0; j < 8; j++) {
+        const m = opp.matchups[`${i}_${j}`];
+        if (!m || m.score === undefined || m.score === '') {
+          resultsEl.innerHTML = '<p class="algo-error">Please fill in all matchup scores first.</p>';
+          resultsEl.style.display = ''; return;
+        }
+        S[i][j] = m.score;
+        V[i][j] = m.volatility || 0;
+      }
+    }
+  } else {
+    myP = appState.myTeam.players;
+    const oppName = document.getElementById('round-opponent').value;
+    oppP = oppName && appState.opponents[oppName] ? appState.opponents[oppName].players : Array.from({ length: 8 }, () => ({ faction: '?' }));
+    for (let i = 0; i < 8; i++) {
+      S[i] = []; V[i] = [];
+      for (let j = 0; j < 8; j++) {
+        const key = `a${i}_b${j}`;
+        if (roundMatchupScores[key] === undefined) {
+          resultsEl.innerHTML = '<p class="algo-error">Please fill in all matchup scores first.</p>';
+          resultsEl.style.display = ''; return;
+        }
+        S[i][j] = roundMatchupScores[key];
+        V[i][j] = roundMatchupVolatility[key] || 0;
+      }
+    }
+  }
+
+  const bestAssignment = hungarianMax(S);
+  const bestTotal = bestAssignment.reduce((sum, j, i) => sum + S[i][j], 0);
+  const worstAssignment = hungarianMin(S);
+  const worstTotal = worstAssignment.reduce((sum, j, i) => sum + S[i][j], 0);
+
+  const allPerms = getAllPermutations(8);
+  const scored = allPerms.map(perm => ({
+    perm,
+    total: perm.reduce((sum, j, i) => sum + S[i][j], 0),
+  }));
+  scored.sort((a, b) => b.total - a.total);
+  const avg = scored.reduce((s, x) => s + x.total, 0) / scored.length;
+
+  const strategy = generatePairingStrategy(S, V, myP, oppP, bestAssignment);
+
+  resultsEl.innerHTML = `
+    <h3>Optimal Pairing Analysis</h3>
+    <div class="algo-summary">
+      <div class="algo-stat algo-stat-best"><span class="algo-stat-label">Best Case</span><span class="algo-stat-value">${bestTotal}</span></div>
+      <div class="algo-stat algo-stat-avg"><span class="algo-stat-label">Average</span><span class="algo-stat-value">${avg.toFixed(1)}</span></div>
+      <div class="algo-stat algo-stat-worst"><span class="algo-stat-label">Worst Case</span><span class="algo-stat-value">${worstTotal}</span></div>
+    </div>
+    <h4>Best Pairing for My Team</h4>
+    <table class="algo-table"><thead><tr><th>My Army</th><th>Opponent</th><th>Score</th><th>Vol</th></tr></thead><tbody>
+      ${bestAssignment.map((j, i) => `<tr>
+        <td class="team-a-color">${escHTML(myP[i]?.faction || '?')}</td>
+        <td class="team-b-color">${escHTML(oppP[j]?.faction || '?')}</td>
+        <td class="${getMatrixCellClass(S[i][j])}" style="font-weight:700;text-align:center">${S[i][j]}</td>
+        <td style="text-align:center">${V[i][j] ? '±' + V[i][j] : '—'}</td>
+      </tr>`).join('')}
+      <tr class="algo-total-row"><td colspan="2"><strong>Total</strong></td><td style="text-align:center"><strong>${bestTotal}</strong></td><td></td></tr>
+    </tbody></table>
+    <h4>Worst Pairing <small>(opponent's ideal)</small></h4>
+    <table class="algo-table"><thead><tr><th>My Army</th><th>Opponent</th><th>Score</th><th>Vol</th></tr></thead><tbody>
+      ${worstAssignment.map((j, i) => `<tr>
+        <td class="team-a-color">${escHTML(myP[i]?.faction || '?')}</td>
+        <td class="team-b-color">${escHTML(oppP[j]?.faction || '?')}</td>
+        <td class="${getMatrixCellClass(S[i][j])}" style="font-weight:700;text-align:center">${S[i][j]}</td>
+        <td style="text-align:center">${V[i][j] ? '±' + V[i][j] : '—'}</td>
+      </tr>`).join('')}
+      <tr class="algo-total-row"><td colspan="2"><strong>Total</strong></td><td style="text-align:center"><strong>${worstTotal}</strong></td><td></td></tr>
+    </tbody></table>
+    <h4>Pairing Strategy Recommendations</h4>
+    <div class="algo-strategy">${strategy}</div>
+  `;
+  resultsEl.style.display = '';
+}
+
+function generatePairingStrategy(S, V, myP, oppP, optimalAssignment) {
+  const playerAnalysis = [];
+  for (let i = 0; i < 8; i++) {
+    const scores = S[i].slice();
+    const min = Math.min(...scores), max = Math.max(...scores);
+    const avg = scores.reduce((a, b) => a + b, 0) / 8;
+    playerAnalysis.push({ idx: i, faction: myP[i]?.faction || '?', min, max, avg, range: max - min, scores });
+  }
+
+  const oppAnalysis = [];
+  for (let j = 0; j < 8; j++) {
+    const scores = S.map(row => row[j]);
+    const min = Math.min(...scores), max = Math.max(...scores);
+    const avg = scores.reduce((a, b) => a + b, 0) / 8;
+    oppAnalysis.push({ idx: j, faction: oppP[j]?.faction || '?', min, max, avg });
+  }
+
+  const defenderCandidates = [...playerAnalysis].sort((a, b) => (b.min * 2 - b.range) - (a.min * 2 - a.range));
+  const attackerCandidates = [...playerAnalysis].sort((a, b) => b.range - a.range);
+  const oppVulnerable = [...oppAnalysis].sort((a, b) => b.avg - a.avg);
+  const oppThreats = [...oppAnalysis].sort((a, b) => a.avg - b.avg);
+
+  return `
+    <div class="strat-section">
+      <h5>Defender Priorities <small>(safe picks)</small></h5>
+      <ol class="strat-list">${defenderCandidates.slice(0, 3).map(p => `<li><strong class="team-a-color">${escHTML(p.faction)}</strong> — Range: ${p.min}-${p.max}, Avg: ${p.avg.toFixed(1)} <span class="strat-tag strat-safe">Safe</span></li>`).join('')}</ol>
+    </div>
+    <div class="strat-section">
+      <h5>Attacker Priorities <small>(target specific opponents)</small></h5>
+      <ol class="strat-list">${attackerCandidates.slice(0, 3).map(p => {
+        const bestJ = p.scores.indexOf(Math.max(...p.scores));
+        return `<li><strong class="team-a-color">${escHTML(p.faction)}</strong> — Best: ${Math.max(...p.scores)} vs <strong class="team-b-color">${escHTML(oppP[bestJ]?.faction || '?')}</strong>, Worst: ${p.min} <span class="strat-tag strat-attack">High impact</span></li>`;
+      }).join('')}</ol>
+    </div>
+    <div class="strat-section">
+      <h5>Opponent Vulnerabilities <small>(target these)</small></h5>
+      <ol class="strat-list">${oppVulnerable.slice(0, 3).map(p => `<li><strong class="team-b-color">${escHTML(p.faction)}</strong> — Avg: ${p.avg.toFixed(1)} (${p.min}-${p.max}) <span class="strat-tag strat-target">Target</span></li>`).join('')}</ol>
+    </div>
+    <div class="strat-section">
+      <h5>Opponent Threats <small>(protect against)</small></h5>
+      <ol class="strat-list">${oppThreats.slice(0, 3).map(p => `<li><strong class="team-b-color">${escHTML(p.faction)}</strong> — Avg: ${p.avg.toFixed(1)} (${p.min}-${p.max}) <span class="strat-tag strat-danger">Dangerous</span></li>`).join('')}</ol>
+    </div>
+  `;
+}
+
+// --- Hungarian Algorithm ---
+
+function hungarianMax(matrix) {
+  const n = matrix.length;
+  return hungarianMin_internal(matrix.map(row => row.map(v => -v)));
+}
+function hungarianMin(matrix) { return hungarianMin_internal(matrix); }
+
+function hungarianMin_internal(cost) {
+  const n = cost.length;
+  const u = new Array(n + 1).fill(0), v = new Array(n + 1).fill(0);
+  const p = new Array(n + 1).fill(0), way = new Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i; let j0 = 0;
+    const minv = new Array(n + 1).fill(Infinity);
+    const used = new Array(n + 1).fill(false);
+    do {
+      used[j0] = true; let i0 = p[j0], delta = Infinity, j1;
+      for (let j = 1; j <= n; j++) {
+        if (!used[j]) {
+          const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+          if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+        }
+      }
+      for (let j = 0; j <= n; j++) {
+        if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else { minv[j] -= delta; }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const result = new Array(n);
+  for (let j = 1; j <= n; j++) result[p[j] - 1] = j - 1;
+  return result;
+}
+
+function getAllPermutations(n) {
+  const result = []; const arr = Array.from({ length: n }, (_, i) => i);
+  function permute(start) {
+    if (start === n) { result.push([...arr]); return; }
+    for (let i = start; i < n; i++) { [arr[start], arr[i]] = [arr[i], arr[start]]; permute(start + 1); [arr[start], arr[i]] = [arr[i], arr[start]]; }
+  }
+  permute(0); return result;
+}
+
+// ===========================
+// Navigation
+// ===========================
+
+function bindNavigation() {
+  document.querySelectorAll('.phase-btn').forEach(btn => {
+    btn.addEventListener('click', () => showPhase(btn.dataset.phase));
+  });
+}
+
+function showPhase(name) {
+  document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.phase-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`phase-${name}`).classList.add('active');
+  document.querySelector(`[data-phase="${name}"]`).classList.add('active');
+
+  // Refresh content when switching tabs
+  if (name === 'prep') { populateCountryDropdown(); if (currentPrepCountry) renderPrepMatrix(); }
+  if (name === 'round') { populateRoundOpponents(); buildRoundMatrix(); updateTablesPreview(); }
+  if (name === 'overview') renderOverview();
+}
+
+// ===========================
+// Tooltips
+// ===========================
 
 function initMapTooltip() {
   const mapTip = document.getElementById('map-tooltip');
   const mapImg = document.getElementById('map-tooltip-img');
   const mapLabel = document.getElementById('map-tooltip-label');
-
   const listTip = document.getElementById('list-tooltip');
   const listHeader = document.getElementById('list-tooltip-header');
   const listBody = document.getElementById('list-tooltip-body');
 
   document.addEventListener('mouseover', (e) => {
-    // Map hover
     const mapTarget = e.target.closest('.map-hoverable');
     if (mapTarget) {
       const mapId = mapTarget.dataset.mapId;
-      if (mapId) {
-        mapImg.src = `maps/${mapId}.jpg`;
-        mapLabel.textContent = mapTarget.dataset.mapName || '';
-        mapTip.classList.add('visible');
-        positionTooltip(e, mapTip, 480, 360);
-      }
+      if (mapId) { mapImg.src = `maps/${mapId}.jpg`; mapLabel.textContent = mapTarget.dataset.mapName || ''; mapTip.classList.add('visible'); positionTooltip(e, mapTip, 480, 360); }
       return;
     }
-
-    // Player hover
     const playerTarget = e.target.closest('.player-hoverable');
     if (playerTarget) {
       const playerId = playerTarget.dataset.playerId;
       if (!playerId) return;
       const player = getPlayerData(playerId);
       if (!player || !player.armyList) return;
-
       listHeader.textContent = player.faction;
       listBody.textContent = player.armyList;
       listTip.classList.add('visible');
       positionTooltip(e, listTip, 400, 300);
-      return;
     }
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (mapTip.classList.contains('visible')) {
-      positionTooltip(e, mapTip, 480, 360);
-    }
-    if (listTip.classList.contains('visible')) {
-      positionTooltip(e, listTip, 400, 300);
-    }
+    if (mapTip.classList.contains('visible')) positionTooltip(e, mapTip, 480, 360);
+    if (listTip.classList.contains('visible')) positionTooltip(e, listTip, 400, 300);
   });
 
   document.addEventListener('mouseout', (e) => {
-    if (e.target.closest('.map-hoverable')) {
-      mapTip.classList.remove('visible');
-    }
-    if (e.target.closest('.player-hoverable')) {
-      listTip.classList.remove('visible');
-    }
+    if (e.target.closest('.map-hoverable')) mapTip.classList.remove('visible');
+    if (e.target.closest('.player-hoverable')) listTip.classList.remove('visible');
   });
 }
 
@@ -1385,46 +1397,82 @@ function getPlayerData(id) {
   return teamAData.find(p => p.id === id) || teamBData.find(p => p.id === id);
 }
 
-function positionTooltip(e, tooltip, tooltipW, tooltipH) {
-  const pad = 16;
-  tooltipW = tooltipW || 480;
-  tooltipH = tooltipH || 360;
-
-  let x = e.clientX + pad;
-  let y = e.clientY + pad;
-
-  // Keep within viewport
-  if (x + tooltipW > window.innerWidth) {
-    x = e.clientX - tooltipW - pad;
-  }
-  if (y + tooltipH > window.innerHeight) {
-    y = e.clientY - tooltipH - pad;
-  }
-  if (x < 0) x = pad;
-  if (y < 0) y = pad;
-
-  tooltip.style.left = x + 'px';
-  tooltip.style.top = y + 'px';
+function positionTooltip(e, tooltip, tw, th) {
+  const pad = 16; tw = tw || 480; th = th || 360;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + tw > window.innerWidth) x = e.clientX - tw - pad;
+  if (y + th > window.innerHeight) y = e.clientY - th - pad;
+  if (x < 0) x = pad; if (y < 0) y = pad;
+  tooltip.style.left = x + 'px'; tooltip.style.top = y + 'px';
 }
 
-/**
- * Returns an HTML string for a map name that shows a preview on hover.
- */
 function mapNameHTML(mapId, mapName) {
   if (!mapId) return mapName || '—';
-  return `<span class="map-hoverable" data-map-id="${mapId}" data-map-name="${mapName}">${mapName}</span>`;
+  return `<span class="map-hoverable" data-map-id="${mapId}" data-map-name="${escHTML(mapName)}">${escHTML(mapName)}</span>`;
 }
 
-/**
- * Returns HTML for a player name that shows their army list on hover.
- */
 function playerHTML(playerId, faction) {
   const player = getPlayerData(playerId);
   const hasList = player && player.armyList;
-  if (hasList) {
-    return `<span class="player-hoverable" data-player-id="${playerId}">${faction}</span>`;
+  if (hasList) return `<span class="player-hoverable" data-player-id="${playerId}">${escHTML(faction)}</span>`;
+  return escHTML(faction);
+}
+
+// ===========================
+// Utilities
+// ===========================
+
+function escHTML(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function showToast(msg) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;';
+    document.body.appendChild(container);
   }
-  return faction;
+  const toast = document.createElement('div');
+  toast.style.cssText = 'padding:12px 20px;background:#1a1a2e;border:1px solid #ffd600;border-radius:8px;color:#e8e8f0;font-size:0.85rem;font-family:Inter,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,0.4);animation:fadeIn 0.3s ease;';
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
+}
+
+function addListToggle(container) {
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-list-toggle');
+    if (!btn) return;
+    const targetId = btn.dataset.target;
+    const wrap = document.getElementById(targetId.replace('list-', 'list-wrap-'));
+    if (wrap) { const isOpen = wrap.style.display !== 'none'; wrap.style.display = isOpen ? 'none' : ''; btn.classList.toggle('active', !isOpen); }
+  });
+}
+
+function ensureFactionDatalist() {
+  if (document.getElementById('faction-list')) return;
+  const dl = document.createElement('datalist');
+  dl.id = 'faction-list';
+  FACTIONS_40K.forEach(f => { const opt = document.createElement('option'); opt.value = f; dl.appendChild(opt); });
+  document.body.appendChild(dl);
+}
+
+function pickTeamFactions() {
+  const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const nonSM = shuffle(UNIQUE_FACTIONS);
+  const smChapter = shuffle(SPACE_MARINE_CHAPTERS)[0];
+  const picked = nonSM.slice(0, 7);
+  picked.push(smChapter);
+  return shuffle(picked);
+}
+
+function randomScore() {
+  const r = Math.random() * 100;
+  if (r < 5) return Math.floor(Math.random() * 3);
+  if (r < 30) return 3 + Math.floor(Math.random() * 5);
+  if (r < 70) return 8 + Math.floor(Math.random() * 5);
+  if (r < 95) return 13 + Math.floor(Math.random() * 5);
+  return 18 + Math.floor(Math.random() * 3);
 }
 
 // --- Boot ---

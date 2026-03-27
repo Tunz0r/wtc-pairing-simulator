@@ -16,156 +16,228 @@
     </header>
 
     <nav id="phase-nav">
-      <button class="phase-btn active" data-phase="setup">1. Round Setup</button>
-      <button class="phase-btn" data-phase="pairing">2. Pairing Process</button>
-      <button class="phase-btn" data-phase="results">3. Results</button>
+      <button class="phase-btn active" data-phase="myteam">1. My Team</button>
+      <button class="phase-btn" data-phase="prep">2. Prep</button>
+      <button class="phase-btn" data-phase="round">3. Play Round</button>
+      <button class="phase-btn" data-phase="overview">4. Overview</button>
     </nav>
 
-    <!-- PHASE 1: Round Setup (Teams + Deployment/Mission + Matrix) -->
-    <section id="phase-setup" class="phase active">
-      <div class="setup-grid">
-        <div class="team-setup" id="team-a-setup">
-          <h2>Team A</h2>
-          <input type="text" class="team-name-input" id="team-a-name" placeholder="Team A Name" value="Team A">
-          <div class="players-list" id="team-a-players"></div>
-        </div>
-        <div class="team-setup" id="team-b-setup">
-          <h2>Team B</h2>
-          <input type="text" class="team-name-input" id="team-b-name" placeholder="Team B Name" value="Team B">
-          <div class="players-list" id="team-b-players"></div>
-        </div>
+    <!-- TAB 1: My Team -->
+    <section id="phase-myteam" class="phase active">
+      <div class="team-setup" id="my-team-setup">
+        <h2>My Team</h2>
+        <input type="text" class="team-name-input" id="my-team-name" placeholder="Team / Country Name" value="">
+        <div class="players-list" id="my-team-players"></div>
       </div>
-
-      <!-- Round Config (Deployment + Mission + Tables) -->
-      <div class="round-config-section">
-        <h2>Deployment &amp; Mission</h2>
-        <p class="phase-desc">Select the deployment zone and mission for this round. The 8 tables are automatically assigned maps from the chosen deployment.</p>
-        <div class="round-config">
-          <div class="round-config-row">
-            <div class="config-field">
-              <label>Deployment Zone</label>
-              <select id="round-deployment">
-                <option value="">— Select —</option>
-                <optgroup label="Standard">
-                  <!-- populated by JS -->
-                </optgroup>
-              </select>
-            </div>
-            <div class="config-field">
-              <label>Mission</label>
-              <select id="round-mission">
-                <option value="">— Select —</option>
-              </select>
-            </div>
-            <div class="config-field config-field-btn">
-              <label>&nbsp;</label>
-              <button class="btn btn-accent" id="btn-randomize-tables">Randomize</button>
-            </div>
-          </div>
-        </div>
-        <h3 class="tables-preview-title">Tables Preview</h3>
-        <div class="tables-grid" id="tables-grid"></div>
-      </div>
-
-      <!-- 8x8 Matchup Matrix -->
-      <div class="matrix-section" id="matrix-section">
-        <h2>Matchup Matrix</h2>
-        <p class="phase-desc">Enter expected scores (0–20) and volatility ±(0–5). Click a cell to set table preferences.</p>
-        <div class="matrix-legend">
-          <span class="legend-item legend-brown">0–2</span>
-          <span class="legend-item legend-red">3–7</span>
-          <span class="legend-item legend-yellow">8–12</span>
-          <span class="legend-item legend-green">13–17</span>
-          <span class="legend-item legend-blue">18–20</span>
-          <span class="legend-item legend-vol">± = Volatility</span>
-        </div>
-        <div class="matrix-scroll">
-          <table class="matchup-matrix" id="matchup-matrix">
-            <thead id="matrix-thead"></thead>
-            <tbody id="matrix-tbody"></tbody>
-          </table>
-        </div>
-
-        <!-- Table prefs panel (appears when cell selected) -->
-        <div class="table-prefs-panel" id="table-prefs-panel" style="display:none"></div>
-
-        <!-- Algorithm -->
-        <div class="algo-actions">
-          <button class="btn btn-accent" id="btn-fill-matrix">Fill Dummy Scores</button>
-          <button class="btn btn-primary" id="btn-run-algo">Analyze Optimal Pairings</button>
-        </div>
-        <div class="algorithm-results" id="algorithm-results" style="display:none"></div>
-      </div>
-
       <div class="phase-actions">
-        <button class="btn btn-accent" id="btn-fill-dummy">Fill Dummy Teams</button>
-        <button class="btn btn-primary" id="btn-to-pairing">Begin Pairing Process →</button>
+        <button class="btn btn-accent" id="btn-fill-my-team">Fill Dummy Team</button>
+        <button class="btn btn-secondary" id="btn-save-my-team">Save to Browser</button>
       </div>
     </section>
 
-    <!-- PHASE 3: Pairing Process -->
-    <section id="phase-pairing" class="phase">
-      <div class="pairing-header">
-        <h2 id="pairing-step-title">Pairing Round 1 — Step 1</h2>
-        <p id="pairing-step-desc" class="phase-desc"></p>
+    <!-- TAB 2: Prep -->
+    <section id="phase-prep" class="phase">
+      <div class="prep-header">
+        <h2>Opponent Prep</h2>
+        <div class="prep-country-bar">
+          <select id="prep-country-select">
+            <option value="">— Select Opponent Country —</option>
+          </select>
+          <button class="btn btn-accent" id="btn-add-country">+ Add Country</button>
+          <button class="btn btn-secondary" id="btn-remove-country" style="display:none">Remove</button>
+        </div>
       </div>
 
-      <div class="pairing-layout">
-        <!-- Visual board -->
-        <div class="pairing-board">
-          <div class="board-row board-header-row">
-            <div class="board-cell header-cell team-a-color">
-              <span id="board-team-a-name">Team A</span>
-            </div>
-            <div class="board-cell header-cell versus">VS</div>
-            <div class="board-cell header-cell team-b-color">
-              <span id="board-team-b-name">Team B</span>
-            </div>
-          </div>
+      <!-- Opponent editor (hidden until country selected) -->
+      <div id="prep-editor" style="display:none">
+        <div class="team-setup" id="opp-team-setup">
+          <h2 id="opp-team-title">Opponent</h2>
+          <div class="players-list" id="opp-team-players"></div>
+        </div>
 
-          <div id="board-matches"></div>
-
-          <div class="board-section">
-            <h3>Available Players</h3>
-            <div class="available-row">
-              <div class="available-pool" id="pool-a"></div>
-              <div class="available-pool" id="pool-b"></div>
-            </div>
-          </div>
-
-          <div class="board-section" id="table-choice-section" style="display:none">
-            <div class="table-choice-token" id="table-choice-token">
-              Table Choice: <span id="table-choice-team">—</span>
+        <!-- Deployment selector for table prefs context -->
+        <div class="round-config-section" style="margin-top:20px">
+          <h2>Prep Deployment Context</h2>
+          <p class="phase-desc">Select a deployment zone to see table/map names in the table preferences below.</p>
+          <div class="round-config">
+            <div class="round-config-row" style="grid-template-columns:1fr">
+              <div class="config-field">
+                <label>Deployment Zone (for table pref context)</label>
+                <select id="prep-deployment">
+                  <option value="">— Select —</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Action panel -->
-        <div class="action-panel" id="action-panel">
-          <div id="action-content"></div>
+        <!-- 8x8 Matchup Matrix -->
+        <div class="matrix-section" id="matrix-section">
+          <h2>Matchup Matrix</h2>
+          <p class="phase-desc">Enter expected scores (0-20) and volatility (0-5). Click a cell to set table preferences.</p>
+          <div class="matrix-legend">
+            <span class="legend-item legend-brown">0-2</span>
+            <span class="legend-item legend-red">3-7</span>
+            <span class="legend-item legend-yellow">8-12</span>
+            <span class="legend-item legend-green">13-17</span>
+            <span class="legend-item legend-blue">18-20</span>
+            <span class="legend-item legend-vol">± = Volatility</span>
+          </div>
+          <div class="matrix-scroll">
+            <table class="matchup-matrix" id="matchup-matrix">
+              <thead id="matrix-thead"></thead>
+              <tbody id="matrix-tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-prefs-panel" id="table-prefs-panel" style="display:none"></div>
+          <div class="algo-actions">
+            <button class="btn btn-accent" id="btn-fill-matrix">Fill Dummy Scores</button>
+            <button class="btn btn-accent" id="btn-fill-opp-team">Fill Dummy Opponent</button>
+            <button class="btn btn-primary" id="btn-run-algo">Analyze Optimal Pairings</button>
+            <button class="btn btn-secondary" id="btn-save-prep">Save Prep</button>
+          </div>
+          <div class="algorithm-results" id="algorithm-results" style="display:none"></div>
         </div>
-      </div>
-
-      <!-- Collapsible matrix reference during pairing -->
-      <details class="matrix-reference" id="matrix-reference">
-        <summary class="matrix-ref-toggle">Matchup Matrix Reference</summary>
-        <div class="matrix-ref-body" id="matrix-ref-body"></div>
-      </details>
-
-      <div class="phase-actions">
-        <button class="btn btn-secondary" id="btn-back-setup">← Back to Setup</button>
-        <button class="btn btn-secondary" id="btn-reset-pairing">Reset Pairing</button>
       </div>
     </section>
 
-    <!-- PHASE 4: Results -->
-    <section id="phase-results" class="phase">
-      <h2>Pairing Results</h2>
-      <div id="results-content"></div>
-      <div class="phase-actions">
-        <button class="btn btn-secondary" id="btn-back-pairing">← Back to Pairing</button>
-        <button class="btn btn-primary" id="btn-new-round">New Round</button>
+    <!-- TAB 3: Play Round -->
+    <section id="phase-round" class="phase">
+      <!-- Round selector bar -->
+      <div class="round-selector-bar">
+        <button class="round-num-btn active" data-round="0">R1</button>
+        <button class="round-num-btn" data-round="1">R2</button>
+        <button class="round-num-btn" data-round="2">R3</button>
+        <button class="round-num-btn" data-round="3">R4</button>
+        <button class="round-num-btn" data-round="4">R5</button>
+        <button class="round-num-btn" data-round="5">R6</button>
+        <button class="round-num-btn" data-round="6">R7</button>
       </div>
+
+      <!-- Round config (before pairing starts) -->
+      <div id="round-config-area">
+        <div class="round-config-section">
+          <h2 id="round-title">Round 1 Setup</h2>
+          <div class="round-config">
+            <div class="round-config-row">
+              <div class="config-field">
+                <label>Opponent</label>
+                <select id="round-opponent">
+                  <option value="">— Select Opponent —</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <label>Deployment Zone</label>
+                <select id="round-deployment">
+                  <option value="">— Select —</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <label>Mission</label>
+                <select id="round-mission">
+                  <option value="">— Select —</option>
+                </select>
+              </div>
+              <div class="config-field config-field-btn">
+                <label>&nbsp;</label>
+                <button class="btn btn-accent" id="btn-randomize-round">Randomize D/M</button>
+              </div>
+            </div>
+          </div>
+          <div class="round-prefill-bar" id="round-prefill-bar" style="display:none">
+            <button class="btn btn-primary" id="btn-load-prep">Load Matrix from Prep</button>
+            <span class="prefill-hint">Pre-fills the matchup matrix from your prep for this opponent.</span>
+          </div>
+        </div>
+
+        <!-- Tables preview -->
+        <div class="round-config-section" style="margin-top:16px">
+          <h3 class="tables-preview-title">Tables Preview</h3>
+          <div class="tables-grid" id="tables-grid"></div>
+        </div>
+
+        <!-- Round matrix (editable, pre-filled from prep) -->
+        <div class="matrix-section" id="round-matrix-section">
+          <h2>Round Matchup Matrix</h2>
+          <p class="phase-desc">Pre-filled from prep (if available). Edit as needed for this specific round.</p>
+          <div class="matrix-legend">
+            <span class="legend-item legend-brown">0-2</span>
+            <span class="legend-item legend-red">3-7</span>
+            <span class="legend-item legend-yellow">8-12</span>
+            <span class="legend-item legend-green">13-17</span>
+            <span class="legend-item legend-blue">18-20</span>
+          </div>
+          <div class="matrix-scroll">
+            <table class="matchup-matrix" id="round-matrix">
+              <thead id="round-matrix-thead"></thead>
+              <tbody id="round-matrix-tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-prefs-panel" id="round-table-prefs-panel" style="display:none"></div>
+          <div class="algo-actions">
+            <button class="btn btn-primary" id="btn-round-algo">Analyze Optimal Pairings</button>
+          </div>
+          <div class="algorithm-results" id="round-algorithm-results" style="display:none"></div>
+        </div>
+
+        <div class="phase-actions">
+          <button class="btn btn-primary" id="btn-start-pairing">Begin Pairing Process</button>
+        </div>
+      </div>
+
+      <!-- Pairing process (shown after Begin) -->
+      <div id="round-pairing-area" style="display:none">
+        <div class="pairing-header">
+          <h2 id="pairing-step-title">Pairing Round 1 - Step 1</h2>
+          <p id="pairing-step-desc" class="phase-desc"></p>
+        </div>
+
+        <div class="pairing-layout">
+          <div class="pairing-board">
+            <div class="board-row board-header-row">
+              <div class="board-cell header-cell team-a-color">
+                <span id="board-team-a-name">My Team</span>
+              </div>
+              <div class="board-cell header-cell versus">VS</div>
+              <div class="board-cell header-cell team-b-color">
+                <span id="board-team-b-name">Opponent</span>
+              </div>
+            </div>
+            <div id="board-matches"></div>
+            <div class="board-section">
+              <h3>Available Players</h3>
+              <div class="available-row">
+                <div class="available-pool" id="pool-a"></div>
+                <div class="available-pool" id="pool-b"></div>
+              </div>
+            </div>
+            <div class="board-section" id="table-choice-section" style="display:none">
+              <div class="table-choice-token" id="table-choice-token">
+                Table Choice: <span id="table-choice-team">-</span>
+              </div>
+            </div>
+          </div>
+          <div class="action-panel" id="action-panel">
+            <div id="action-content"></div>
+          </div>
+        </div>
+
+        <details class="matrix-reference" id="matrix-reference">
+          <summary class="matrix-ref-toggle">Matchup Matrix Reference</summary>
+          <div class="matrix-ref-body" id="matrix-ref-body"></div>
+        </details>
+
+        <div class="phase-actions">
+          <button class="btn btn-secondary" id="btn-back-round-config">Back to Round Config</button>
+          <button class="btn btn-secondary" id="btn-reset-pairing">Reset Pairing</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Overview -->
+    <section id="phase-overview" class="phase">
+      <h2>Tournament Overview</h2>
+      <div id="overview-content"></div>
     </section>
   </div>
 
