@@ -74,6 +74,14 @@ function loadState() {
       while (appState.rounds.length < 7) appState.rounds.push(null);
       if (!appState.tableTags) appState.tableTags = {};
       if (!appState.armyTablePrefs) appState.armyTablePrefs = {};
+      if (!appState.opponents) appState.opponents = {};
+      // Firebase drops empty objects — ensure every opponent has matchups + tablePrefs
+      for (const key of Object.keys(appState.opponents)) {
+        const opp = appState.opponents[key];
+        if (!opp.matchups) opp.matchups = {};
+        if (!opp.tablePrefs) opp.tablePrefs = {};
+        if (!opp.players) opp.players = Array.from({ length: 8 }, () => ({ faction: '', armyList: '' }));
+      }
     }
   } catch (e) { console.warn('Failed to load state', e); }
 }
@@ -565,6 +573,10 @@ function fillDummyPrepMatrix() {
 function renderPrepMatrix() {
   if (!currentPrepCountry) return;
   const opp = appState.opponents[currentPrepCountry];
+  if (!opp) return;
+  if (!opp.matchups) opp.matchups = {};
+  if (!opp.tablePrefs) opp.tablePrefs = {};
+  if (!opp.players) opp.players = Array.from({ length: 8 }, () => ({ faction: '', armyList: '' }));
   const dep = document.getElementById('prep-deployment').value;
   selectedMatrixCell = null;
 

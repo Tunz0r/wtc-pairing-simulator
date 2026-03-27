@@ -133,6 +133,13 @@ function mergeState(local, remote) {
   if (!merged.armyTablePrefs) merged.armyTablePrefs = {};
   if (!merged.opponents) merged.opponents = {};
   if (!merged.myTeam) merged.myTeam = { name: 'Denmark', players: Array.from({ length: 8 }, () => ({ faction: '', armyList: '' })) };
+  // Firebase drops empty objects — ensure every opponent has matchups + tablePrefs
+  for (const key of Object.keys(merged.opponents)) {
+    const opp = merged.opponents[key];
+    if (!opp.matchups) opp.matchups = {};
+    if (!opp.tablePrefs) opp.tablePrefs = {};
+    if (!opp.players) opp.players = Array.from({ length: 8 }, () => ({ faction: '', armyList: '' }));
+  }
   return merged;
 }
 
