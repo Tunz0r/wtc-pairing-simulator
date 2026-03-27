@@ -34,6 +34,117 @@ body {
   line-height: 1.5;
 }
 
+/* ===========================
+   Login Overlay
+   =========================== */
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-dark);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 48px 40px;
+  text-align: center;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+
+.login-logo {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.login-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.login-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 32px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-input {
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 214, 0, 0.15);
+}
+
+.login-input::placeholder {
+  color: var(--text-muted);
+}
+
+.login-btn {
+  margin-top: 8px;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.login-error {
+  color: #ef5350;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Sync Badge */
+.sync-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  vertical-align: middle;
+  margin-left: 10px;
+  letter-spacing: 0.3px;
+}
+
+.sync-on {
+  background: rgba(67, 160, 71, 0.15);
+  color: #43a047;
+  border: 1px solid rgba(67, 160, 71, 0.3);
+}
+
+.sync-off {
+  background: rgba(136, 136, 170, 0.1);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
 #app {
   max-width: 1400px;
   margin: 0 auto;
@@ -2068,6 +2179,233 @@ details[open] .matrix-ref-toggle::before {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* ===========================
+   Win Tracker
+   =========================== */
+
+.win-tracker {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.win-tracker-bar {
+  position: relative;
+  height: 28px;
+  background: var(--bg-surface);
+  border-radius: 14px;
+  overflow: visible;
+  border: 1px solid var(--border);
+}
+
+.win-tracker-fill {
+  height: 100%;
+  border-radius: 14px;
+  transition: width 0.4s ease, background 0.3s ease;
+  min-width: 0;
+}
+
+.win-fill-good {
+  background: linear-gradient(90deg, #2e7d32, #43a047);
+}
+
+.win-fill-close {
+  background: linear-gradient(90deg, #f9a825, #fdd835);
+}
+
+.win-fill-behind {
+  background: linear-gradient(90deg, #c62828, #ef5350);
+}
+
+.win-tracker-target {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  background: var(--accent);
+  transform: translateX(-50%);
+  z-index: 2;
+  border-radius: 2px;
+}
+
+.win-target-label {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.win-tracker-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.win-tracker-current {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+
+.win-tracker-sep {
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+.win-tracker-target-num {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.win-tracker-delta {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 2px 10px;
+  border-radius: 12px;
+}
+
+.delta-good {
+  color: #43a047;
+  background: rgba(67, 160, 71, 0.15);
+}
+
+.delta-bad {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.15);
+}
+
+.win-tracker-needs {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.needs-label {
+  color: var(--text-secondary);
+}
+
+.needs-label strong {
+  color: var(--text-primary);
+}
+
+.needs-win {
+  color: #43a047;
+  font-weight: 600;
+}
+
+.needs-lose {
+  color: #ef5350;
+  font-weight: 600;
+}
+
+.needs-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.needs-tag-ok {
+  background: rgba(67, 160, 71, 0.15);
+  color: #43a047;
+}
+
+.needs-tag-push {
+  background: rgba(255, 183, 77, 0.2);
+  color: #ffb74d;
+}
+
+.needs-tag-hard {
+  background: rgba(239, 83, 80, 0.15);
+  color: #ef5350;
+}
+
+.needs-tag-impossible {
+  background: rgba(198, 40, 40, 0.25);
+  color: #e53935;
+}
+
+/* ===========================
+   Directive Buttons
+   =========================== */
+
+.directive-cell {
+  min-width: 100px;
+}
+
+.directive-btns {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.dir-btn {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+
+.dir-btn:hover {
+  border-color: var(--text-secondary);
+  background: var(--bg-hover);
+  transform: scale(1.1);
+}
+
+.dir-aggressive.active {
+  border-color: #ef5350;
+  background: rgba(239, 83, 80, 0.2);
+  box-shadow: 0 0 8px rgba(239, 83, 80, 0.3);
+}
+
+.dir-steady.active {
+  border-color: #42a5f5;
+  background: rgba(66, 165, 245, 0.2);
+  box-shadow: 0 0 8px rgba(66, 165, 245, 0.3);
+}
+
+.dir-safe.active {
+  border-color: #66bb6a;
+  background: rgba(102, 187, 106, 0.2);
+  box-shadow: 0 0 8px rgba(102, 187, 106, 0.3);
+}
+
+/* ===========================
+   Coaching Champion Tag
+   =========================== */
+
+.coaching-champion-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.8rem;
+  vertical-align: middle;
+  opacity: 0.9;
 }
 
 /* Scrollbar styling */

@@ -34,6 +34,11 @@ let isWhatIfMode = false;
 
 function init() {
   loadState();
+  // Ensure Denmark is always the team name
+  if (!appState.myTeam.name || appState.myTeam.name === '') {
+    appState.myTeam.name = 'Denmark';
+    saveState();
+  }
   buildMyTeamInputs();
   buildTablePrefsUI();
   buildPrepUI();
@@ -43,6 +48,21 @@ function init() {
   initMapTooltip();
   renderOverview();
 }
+
+// --- Boot: login gate first, then init ---
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof initLoginGate === 'function') {
+    const loggedIn = initLoginGate();
+    if (loggedIn) {
+      init();
+      if (typeof initSync === 'function') initSync();
+    }
+    // If not logged in, sync.js attemptLogin() will call init() + initSync() on success
+  } else {
+    // No sync.js loaded — boot directly
+    init();
+  }
+});
 
 function loadState() {
   try {
@@ -60,6 +80,7 @@ function loadState() {
 
 function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch (e) { console.warn('Failed to save', e); }
+  if (typeof syncState === 'function') syncState();
 }
 
 // ===========================
@@ -69,7 +90,8 @@ function saveState() {
 function buildMyTeamInputs() {
   const container = document.getElementById('my-team-players');
   container.innerHTML = '';
-  document.getElementById('my-team-name').value = appState.myTeam.name || '';
+  appState.myTeam.name = 'Denmark';
+  document.getElementById('my-team-name').value = 'Denmark';
 
   for (let i = 0; i < 8; i++) {
     const p = appState.myTeam.players[i] || { faction: '', armyList: '' };
@@ -118,7 +140,7 @@ function collectMyTeam() {
 
 function fillDummyMyTeam() {
   const factions = pickTeamFactions();
-  appState.myTeam.name = 'Belgium';
+  appState.myTeam.name = 'Denmark';
   for (let i = 0; i < 8; i++) {
     appState.myTeam.players[i] = { faction: factions[i], armyList: '' };
   }
@@ -1511,6 +1533,7 @@ function saveCoachingData(roundIdx, scores, broadcast = true) {
       coachingChannel.postMessage({ type: 'coaching_update', roundIdx, scores });
     }
   } catch (e) { console.warn('Failed to save coaching data', e); }
+  if (typeof syncCoaching === 'function') syncCoaching();
 }
 
 function renderCoachingTab() {
@@ -1529,12 +1552,26 @@ function renderCoachingTab() {
   const matches = rd.matches || [];
 
   let html = `
+    <div class="win-tracker" id="win-tracker">
+      <div class="win-tracker-bar">
+        <div class="win-tracker-fill" id="win-tracker-fill" style="width:0%"></div>
+        <div class="win-tracker-target" style="left:${(86/160)*100}%"><span class="win-target-label">86</span></div>
+      </div>
+      <div class="win-tracker-info">
+        <span class="win-tracker-current" id="win-tracker-current">0</span>
+        <span class="win-tracker-sep">/</span>
+        <span class="win-tracker-target-num">86 to win</span>
+        <span class="win-tracker-delta" id="win-tracker-delta"></span>
+      </div>
+      <div class="win-tracker-needs" id="win-tracker-needs"></div>
+    </div>
     <div class="coaching-table-wrap">
       <table class="coaching-table">
         <thead>
           <tr>
             <th>#</th>
             <th>Matchup</th>
+            <th>Directive</th>
             <th>Table</th>
             <th class="est-col">Est.</th>
             <th class="vol-col">Vol</th>
@@ -1595,6 +1632,7 @@ function renderCoachingTab() {
                  : '';
     const volHTML = vol ? `<span class="coaching-vol-badge">±${vol}</span>` : '<span class="coaching-vol-none">—</span>';
 
+    const directive = (saved._directives && saved._directives[idx]) || '';
     html += `
       <tr>
         <td>${idx + 1}</td>
@@ -1602,6 +1640,14 @@ function renderCoachingTab() {
           <span class="coaching-match-a">${escHTML(m.factionA || '?')}</span>
           <span class="coaching-match-vs">vs</span>
           <span class="coaching-match-b">${escHTML(m.factionB || '?')}</span>
+          ${m.type === 'champions_pairing' ? '<span class="coaching-champion-tag">👑</span>' : ''}
+        </td>
+        <td class="directive-cell">
+          <div class="directive-btns" data-match="${idx}">
+            <button class="dir-btn dir-aggressive ${directive === 'aggressive' ? 'active' : ''}" data-dir="aggressive" data-match="${idx}" title="Play Aggressive">🔥</button>
+            <button class="dir-btn dir-steady ${directive === 'steady' ? 'active' : ''}" data-dir="steady" data-match="${idx}" title="Stay the Course">⚖️</button>
+            <button class="dir-btn dir-safe ${directive === 'safe' ? 'active' : ''}" data-dir="safe" data-match="${idx}" title="Play Safe / Protect">🛡️</button>
+          </div>
         </td>
         <td class="table-cell">${tableNum} ${tpIcon}</td>
         <td class="est-cell ${getMatrixCellClass(preEst)}">${preEst}</td>
@@ -1619,7 +1665,7 @@ function renderCoachingTab() {
   // Total row
   html += `
       <tr class="total-row">
-        <td colspan="3" class="total-label">TEAM TOTAL</td>
+        <td colspan="4" class="total-label">TEAM TOTAL</td>
         <td class="est-cell" id="coaching-total-est">—</td>
         <td></td>
         <td id="coaching-total-br1">—</td>
@@ -1634,7 +1680,7 @@ function renderCoachingTab() {
 
   content.innerHTML = html;
 
-  // Bind input handlers
+  // Bind BR input handlers
   content.querySelectorAll('.coaching-br-input').forEach(input => {
     input.addEventListener('input', (e) => {
       let val = e.target.value.trim();
@@ -1654,6 +1700,32 @@ function renderCoachingTab() {
 
       saveCoachingData(rIdx, currentSaved);
       updateCoachingTotals(rIdx);
+    });
+  });
+
+  // Bind directive button handlers
+  content.querySelectorAll('.dir-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const matchIdx = parseInt(btn.dataset.match);
+      const dir = btn.dataset.dir;
+      const currentSaved = getCoachingData(rIdx) || {};
+      if (!currentSaved._directives) currentSaved._directives = {};
+
+      // Toggle: click same = clear
+      if (currentSaved._directives[matchIdx] === dir) {
+        delete currentSaved._directives[matchIdx];
+      } else {
+        currentSaved._directives[matchIdx] = dir;
+      }
+
+      saveCoachingData(rIdx, currentSaved);
+
+      // Update UI locally
+      const group = btn.closest('.directive-btns');
+      group.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+      if (currentSaved._directives[matchIdx]) {
+        btn.classList.add('active');
+      }
     });
   });
 
@@ -1714,7 +1786,7 @@ function updateCoachingTotals(roundIdx) {
     if (el) {
       if (brCounts[br] === 8) {
         el.textContent = brTotals[br];
-        el.className = brTotals[br] >= 88 ? 'coaching-good' : brTotals[br] >= 72 ? 'coaching-neutral' : 'coaching-bad';
+        el.className = brTotals[br] >= 86 ? 'coaching-good' : brTotals[br] >= 72 ? 'coaching-neutral' : 'coaching-bad';
       } else if (brCounts[br] > 0) {
         el.textContent = `${brTotals[br]} (${brCounts[br]}/8)`;
         el.className = '';
@@ -1728,8 +1800,11 @@ function updateCoachingTotals(roundIdx) {
   const latestEl = document.getElementById('coaching-total-latest');
   if (latestEl) {
     latestEl.textContent = latestTotal;
-    latestEl.className = 'coaching-latest ' + (latestTotal >= 88 ? 'coaching-good' : latestTotal >= 72 ? '' : 'coaching-bad');
+    latestEl.className = 'coaching-latest ' + (latestTotal >= 86 ? 'coaching-good' : latestTotal >= 72 ? '' : 'coaching-bad');
   }
+
+  // Win tracker
+  updateWinTracker(roundIdx, matches, saved, latestTotal);
 
   // Update latest column cells
   const rd2 = appState.rounds[roundIdx];
@@ -1761,6 +1836,119 @@ function updateCoachingTotals(roundIdx) {
       latestCell.className = 'coaching-latest ' + getMatrixCellClass(parseInt(latest));
     }
   });
+}
+
+function updateWinTracker(roundIdx, matches, saved, latestTotal) {
+  const WIN_TARGET = 86;
+  const MAX_POINTS = 160; // 8 games × 20 max
+
+  const fill = document.getElementById('win-tracker-fill');
+  const current = document.getElementById('win-tracker-current');
+  const delta = document.getElementById('win-tracker-delta');
+  const needs = document.getElementById('win-tracker-needs');
+  if (!fill) return;
+
+  // Calculate fill percentage
+  const pct = Math.min(100, Math.max(0, (latestTotal / MAX_POINTS) * 100));
+  fill.style.width = pct + '%';
+
+  // Color the fill bar
+  if (latestTotal >= WIN_TARGET) {
+    fill.className = 'win-tracker-fill win-fill-good';
+  } else if (latestTotal >= WIN_TARGET - 14) {
+    fill.className = 'win-tracker-fill win-fill-close';
+  } else {
+    fill.className = 'win-tracker-fill win-fill-behind';
+  }
+
+  // Current total
+  current.textContent = latestTotal;
+
+  // Delta display
+  const diff = latestTotal - WIN_TARGET;
+  if (diff >= 0) {
+    delta.textContent = `+${diff} ahead`;
+    delta.className = 'win-tracker-delta delta-good';
+  } else {
+    delta.textContent = `${diff} behind`;
+    delta.className = 'win-tracker-delta delta-bad';
+  }
+
+  // Per-game needs breakdown: which games still have only estimates vs actual BR scores?
+  let gamesWithScores = 0;
+  let pointsFromScored = 0;
+  let gamesWithEstOnly = 0;
+  let pointsFromEst = 0;
+
+  matches.forEach((m, idx) => {
+    const mScores = saved[idx] || {};
+    const aIdx = m.playerA ? parseInt(m.playerA.replace('a','')) : idx;
+    const bIdx = m.playerB ? parseInt(m.playerB.replace('b','')) : idx;
+
+    // Check if any BR score exists
+    let hasScore = false;
+    let latestVal = 0;
+    for (let br = 5; br >= 1; br--) {
+      if (mScores[br] !== undefined && mScores[br] !== '') {
+        hasScore = true;
+        latestVal = parseInt(mScores[br]);
+        break;
+      }
+    }
+
+    if (hasScore) {
+      gamesWithScores++;
+      pointsFromScored += latestVal;
+    } else {
+      // Estimate only
+      let preEst = 10; // default if no estimate
+      const matrixKey = `a${aIdx}_b${bIdx}`;
+      const rd = appState.rounds[roundIdx];
+      if (roundMatchupScores[matrixKey] !== undefined) {
+        preEst = parseInt(roundMatchupScores[matrixKey]);
+      } else if (rd.opponent && appState.opponents[rd.opponent]) {
+        const oppData = appState.opponents[rd.opponent];
+        const prepKey = `${aIdx}_${bIdx}`;
+        if (oppData.matchups[prepKey]) preEst = parseInt(oppData.matchups[prepKey].score);
+      }
+      gamesWithEstOnly++;
+      pointsFromEst += preEst;
+    }
+  });
+
+  const gamesRemaining = 8 - gamesWithScores;
+
+  if (gamesWithScores === 0) {
+    needs.textContent = 'No scores entered yet — showing estimates only.';
+  } else if (gamesRemaining === 0) {
+    // All games scored
+    if (latestTotal >= WIN_TARGET) {
+      needs.innerHTML = `<span class="needs-win">✅ On track to win! ${latestTotal} / ${WIN_TARGET}</span>`;
+    } else {
+      needs.innerHTML = `<span class="needs-lose">⚠️ Currently ${WIN_TARGET - latestTotal} points short of victory.</span>`;
+    }
+  } else {
+    // Some games scored, some not
+    const pointsNeeded = WIN_TARGET - pointsFromScored;
+    const avgNeeded = pointsNeeded / gamesRemaining;
+    const avgNeededStr = avgNeeded.toFixed(1);
+
+    let needsHTML = `<span class="needs-label">${gamesWithScores}/8 games scored (${pointsFromScored} pts)</span> · `;
+    needsHTML += `<span class="needs-label">Remaining ${gamesRemaining} games need <strong>${pointsNeeded} pts</strong> total`;
+    needsHTML += ` (avg <strong>${avgNeededStr}</strong>/game)</span>`;
+
+    if (avgNeeded <= 10) {
+      needsHTML += ` <span class="needs-tag needs-tag-ok">Achievable</span>`;
+    } else if (avgNeeded <= 14) {
+      needsHTML += ` <span class="needs-tag needs-tag-push">Need to push</span>`;
+    } else if (avgNeeded <= 20) {
+      needsHTML += ` <span class="needs-tag needs-tag-hard">Very difficult</span>`;
+    } else {
+      needsHTML += ` <span class="needs-tag needs-tag-impossible">Mathematically impossible</span>`;
+    }
+
+    needs.innerHTML = needsHTML;
+  }
 }
 
 function shareCoachingState() {
@@ -2245,5 +2433,4 @@ function randomScore() {
   return 18 + Math.floor(Math.random() * 3);
 }
 
-// --- Boot ---
-document.addEventListener('DOMContentLoaded', init);
+// --- Boot is handled at top of file via login gate ---
