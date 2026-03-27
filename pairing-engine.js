@@ -152,7 +152,7 @@ class PairingEngine {
           optionsA: this.poolA,
           optionsB: this.poolB,
           simultaneous: true,
-          description: `Round 3: Both teams choose defenders. Note: the last remaining player on each side will automatically be paired together.`,
+          description: `Round 3: Both teams choose defenders. The last remaining player on each side will be the Champion's Pairing (auto-paired).`,
         };
 
       case 'r3_choose_attackers':
@@ -164,7 +164,7 @@ class PairingEngine {
           optionsB: this.poolB.filter(id => id !== this.round3DefenderB),
           count: 2,
           simultaneous: true,
-          description: `Both teams choose 2 attackers. The remaining unchosen player on each side auto-pairs for the 8th match.`,
+          description: `Both teams choose 2 attackers. The remaining unchosen player on each side becomes the Champion's Pairing.`,
         };
 
       case 'r3_refuse_attackers':
@@ -376,14 +376,14 @@ class PairingEngine {
 
     this.log.push(`Round 3: Team A attacks with ${atkA.map(id => this.getPlayerName(id)).join(' & ')}`);
     this.log.push(`Round 3: Team B attacks with ${atkB.map(id => this.getPlayerName(id)).join(' & ')}`);
-    this.log.push(`Round 3: Auto-paired remainders — ${this.getPlayerName(this.round3LastA)} vs ${this.getPlayerName(this.round3LastB)}`);
+    this.log.push(`Round 3: 👑 Champion's Pairing — ${this.getPlayerName(this.round3LastA)} vs ${this.getPlayerName(this.round3LastB)}`);
 
     // Record the 8th match (remaining players) immediately
     this.matches.push({
       playerA: this.round3LastA,
       playerB: this.round3LastB,
       table: null,
-      type: 'remaining',
+      type: 'champions_pairing',
       round: 3,
       defenderTeam: null,
     });
@@ -473,5 +473,44 @@ class PairingEngine {
     this.refusedB = null;
     this.acceptedA = null;
     this.acceptedB = null;
+  }
+
+  /**
+   * Create a deep snapshot of the entire engine state for what-if branching
+   */
+  createSnapshot() {
+    return JSON.parse(JSON.stringify({
+      poolA: this.poolA,
+      poolB: this.poolB,
+      matches: this.matches,
+      availableTables: this.availableTables,
+      tableChoiceToken: this.tableChoiceToken,
+      round: this.round,
+      step: this.step,
+      defenderA: this.defenderA,
+      defenderB: this.defenderB,
+      attackersA: this.attackersA,
+      attackersB: this.attackersB,
+      refusedA: this.refusedA,
+      refusedB: this.refusedB,
+      acceptedA: this.acceptedA,
+      acceptedB: this.acceptedB,
+      round3DefenderA: this.round3DefenderA,
+      round3DefenderB: this.round3DefenderB,
+      round3AttackersA: this.round3AttackersA,
+      round3AttackersB: this.round3AttackersB,
+      round3RefusedA: this.round3RefusedA,
+      round3RefusedB: this.round3RefusedB,
+      round3LastA: this.round3LastA,
+      round3LastB: this.round3LastB,
+      log: this.log,
+    }));
+  }
+
+  /**
+   * Restore engine state from a snapshot
+   */
+  restoreSnapshot(snap) {
+    Object.assign(this, JSON.parse(JSON.stringify(snap)));
   }
 }

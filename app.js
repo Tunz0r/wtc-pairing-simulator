@@ -26,6 +26,10 @@ let roundMatchupScores = {};
 let roundMatchupVolatility = {};
 let roundMatchupTablePrefs = {};
 
+// What-If mode
+let whatIfSnapshot = null;
+let isWhatIfMode = false;
+
 // --- Init ---
 
 function init() {
@@ -446,13 +450,19 @@ function buildOppTeamInputs() {
   const opp = appState.opponents[currentPrepCountry];
 
   for (let i = 0; i < 8; i++) {
-    const p = opp.players[i] || { faction: '', armyList: '' };
+    const p = opp.players[i] || { faction: '', armyList: '', flags: [] };
+    const flags = p.flags || [];
     const wrapper = document.createElement('div');
     wrapper.className = 'player-entry';
     wrapper.innerHTML = `
       <div class="player-row">
         <span class="player-num">${i + 1}</span>
         <input type="text" class="player-faction" id="opp-faction-${i}" placeholder="Army / Faction" list="faction-list" value="${escHTML(p.faction)}" />
+        <div class="opp-flags" data-idx="${i}">
+          <button type="button" class="flag-btn ${flags.includes('unknown') ? 'active' : ''}" data-flag="unknown" data-idx="${i}" title="Unknown / Unusual List">❓</button>
+          <button type="button" class="flag-btn ${flags.includes('danger') ? 'active' : ''}" data-flag="danger" data-idx="${i}" title="Dangerous Player / Top Competitor">⚠️</button>
+          <button type="button" class="flag-btn ${flags.includes('wildcard') ? 'active' : ''}" data-flag="wildcard" data-idx="${i}" title="Wildcard / Off-Meta Build">🃏</button>
+        </div>
         <button type="button" class="btn-list-toggle" data-target="opp-list-${i}" title="Army List">&#9776;</button>
       </div>
       <div class="army-list-wrap" id="opp-list-wrap-${i}" style="display:none">
@@ -464,6 +474,19 @@ function buildOppTeamInputs() {
 
   addListToggle(container);
 
+  // Flag toggle handlers
+  container.addEventListener('click', (e) => {
+    const flagBtn = e.target.closest('.flag-btn');
+    if (!flagBtn) return;
+    const idx = parseInt(flagBtn.dataset.idx);
+    const flag = flagBtn.dataset.flag;
+    if (!opp.players[idx].flags) opp.players[idx].flags = [];
+    const arr = opp.players[idx].flags;
+    const pos = arr.indexOf(flag);
+    if (pos >= 0) { arr.splice(pos, 1); flagBtn.classList.remove('active'); }
+    else { arr.push(flag); flagBtn.classList.add('active'); }
+  });
+
   container.addEventListener('input', () => collectPrepData());
 }
 
@@ -473,7 +496,12 @@ function collectPrepData() {
   for (let i = 0; i < 8; i++) {
     const fEl = document.getElementById(`opp-faction-${i}`);
     const lEl = document.getElementById(`opp-list-${i}`);
-    if (fEl) opp.players[i] = { faction: fEl.value.trim(), armyList: lEl ? lEl.value.trim() : '' };
+    const existingFlags = opp.players[i]?.flags || [];
+    if (fEl) opp.players[i] = {
+      faction: fEl.value.trim(),
+      armyList: lEl ? lEl.value.trim() : '',
+      flags: existingFlags,
+    };
   }
 }
 
@@ -549,10 +577,13 @@ function buildRoundUI() {
   document.getElementById('btn-load-prep').addEventListener('click', loadPrepIntoRound);
   document.getElementById('btn-start-pairing').addEventListener('click', startPairing);
   document.getElementById('btn-back-round-config').addEventListener('click', () => {
+    exitWhatIfMode();
     document.getElementById('round-config-area').style.display = '';
     document.getElementById('round-pairing-area').style.display = 'none';
   });
-  document.getElementById('btn-reset-pairing').addEventListener('click', () => startPairing());
+  document.getElementById('btn-reset-pairing').addEventListener('click', () => { exitWhatIfMode(); startPairing(); });
+  document.getElementById('btn-whatif').addEventListener('click', enterWhatIfMode);
+  document.getElementById('btn-whatif-exit').addEventListener('click', () => exitWhatIfMode(true));
   document.getElementById('btn-round-algo').addEventListener('click', () => runOptimalPairing('round'));
 
   showRoundConfig();
@@ -741,7 +772,9 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
   let headerHTML = '<tr><th class="matrix-corner"></th>';
   for (let j = 0; j < 8; j++) {
     const f = oppPlayers[j]?.faction || '?';
-    headerHTML += `<th class="col-header team-b-color" title="${escHTML(f)}">${escHTML(f)}</th>`;
+    const flags = oppPlayers[j]?.flags || [];
+    const flagIcons = flags.map(fl => fl === 'unknown' ? '❓' : fl === 'danger' ? '⚠️' : fl === 'wildcard' ? '🃏' : '').join('');
+    headerHTML += `<th class="col-header team-b-color" title="${escHTML(f)}">${escHTML(f)}${flagIcons ? `<span class="matrix-flags">${flagIcons}</span>` : ''}</th>`;
   }
   headerHTML += '</tr>';
   thead.innerHTML = headerHTML;
@@ -967,8 +1000,8 @@ function renderPairingState() {
   renderActionPanel(prompt, state);
   updateMatrixReference();
 
-  // If complete, save round results
-  if (state.isComplete) {
+  // If complete, save round results (but not in What-If mode)
+  if (state.isComplete && !isWhatIfMode) {
     saveRoundResults();
   }
 }
@@ -1054,7 +1087,7 @@ function renderMatches(state) {
           <div class="match-table">Table ${match.table + 1} ${tablePrefHTML}</div>
           <div class="match-map">${mapNameHTML(tableInfo.mapId, tableInfo.map)}</div>
         ` : '<div class="match-table pending">Table TBD</div>'}
-        <div class="match-type">${match.type.replace(/_/g, ' ')}</div>
+        <div class="match-type ${match.type === 'champions_pairing' ? 'match-type-champion' : ''}">${formatMatchType(match.type)}</div>
       </div>
       <div class="match-player team-b-bg"><strong>${playerHTML(match.playerB, pB.faction)}</strong></div>
     `;
@@ -1069,7 +1102,8 @@ function renderPools(state) {
   }).join('');
   document.getElementById('pool-b').innerHTML = state.poolB.map(id => {
     const p = engine.getPlayer(id);
-    return `<div class="pool-player team-b-bg" data-id="${id}"><strong>${playerHTML(id, p.faction)}</strong></div>`;
+    const fi = playerFlagIcons(id);
+    return `<div class="pool-player team-b-bg" data-id="${id}"><strong>${playerHTML(id, p.faction)}${fi}</strong></div>`;
   }).join('');
 }
 
@@ -1113,13 +1147,13 @@ function renderDualSelect(panel, prompt) {
       <div class="select-panel team-a-panel">
         <h3>${prompt.titleA}</h3>
         <div class="select-options" id="sel-a">
-          ${prompt.optionsA.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
+          ${prompt.optionsA.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}${playerFlagIcons(id)}</button>`).join('')}
         </div>
       </div>
       <div class="select-panel team-b-panel">
         <h3>${prompt.titleB}</h3>
         <div class="select-options" id="sel-b">
-          ${prompt.optionsB.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
+          ${prompt.optionsB.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}${playerFlagIcons(id)}</button>`).join('')}
         </div>
       </div>
     </div>
@@ -1170,14 +1204,14 @@ function renderDualSelectMulti(panel, prompt) {
         <h3>${prompt.titleA}</h3>
         <p class="sel-hint">Select ${prompt.count} players</p>
         <div class="select-options" id="sel-a">
-          ${prompt.optionsA.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
+          ${prompt.optionsA.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}${playerFlagIcons(id)}</button>`).join('')}
         </div>
       </div>
       <div class="select-panel team-b-panel">
         <h3>${prompt.titleB}</h3>
         <p class="sel-hint">Select ${prompt.count} players</p>
         <div class="select-options" id="sel-b">
-          ${prompt.optionsB.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}</button>`).join('')}
+          ${prompt.optionsB.map(id => `<button class="sel-btn" data-id="${id}">${engine.getPlayer(id).faction}${playerFlagIcons(id)}</button>`).join('')}
         </div>
       </div>
     </div>
@@ -1316,6 +1350,35 @@ function renderComplete(panel, prompt) {
     renderOverview();
     showPhase('overview');
   });
+}
+
+// --- What-If Mode ---
+
+function enterWhatIfMode() {
+  if (!engine || isWhatIfMode) return;
+  if (engine.step === 'complete') { showToast('Pairing is already complete.'); return; }
+  whatIfSnapshot = engine.createSnapshot();
+  isWhatIfMode = true;
+  document.getElementById('btn-whatif').style.display = 'none';
+  document.getElementById('btn-whatif-exit').style.display = '';
+  document.getElementById('whatif-banner').style.display = '';
+  document.getElementById('round-pairing-area').classList.add('whatif-active');
+  showToast('What-If mode entered. Explore freely!');
+}
+
+function exitWhatIfMode(restore) {
+  if (!isWhatIfMode) return;
+  if (restore && whatIfSnapshot && engine) {
+    engine.restoreSnapshot(whatIfSnapshot);
+    renderPairingState();
+  }
+  whatIfSnapshot = null;
+  isWhatIfMode = false;
+  document.getElementById('btn-whatif').style.display = '';
+  document.getElementById('btn-whatif-exit').style.display = 'none';
+  document.getElementById('whatif-banner').style.display = 'none';
+  document.getElementById('round-pairing-area').classList.remove('whatif-active');
+  if (restore) showToast('Restored to saved state.');
 }
 
 // --- Matrix Reference ---
@@ -1813,7 +1876,7 @@ function renderOverview() {
           <td class="team-a-cell">${escHTML(m.factionA || '?')}</td>
           <td class="vs-cell">vs</td>
           <td class="team-b-cell">${escHTML(m.factionB || '?')}</td>
-          <td><span class="type-badge">${(m.type || '').replace(/_/g, ' ')}</span></td>
+          <td><span class="type-badge ${m.type === 'champions_pairing' ? 'type-badge-champion' : ''}">${formatMatchType(m.type)}</span></td>
         </tr>`;
       });
       html += '</tbody></table>';
@@ -2104,6 +2167,30 @@ function playerHTML(playerId, faction) {
 // ===========================
 // Utilities
 // ===========================
+
+function getPlayerFlags(id) {
+  // For team B players, get flags from the current round's opponent data
+  if (!id || !id.startsWith('b')) return [];
+  const idx = parseInt(id.replace('b', ''));
+  const oppName = document.getElementById('round-opponent')?.value;
+  if (oppName && appState.opponents[oppName] && appState.opponents[oppName].players[idx]) {
+    return appState.opponents[oppName].players[idx].flags || [];
+  }
+  return [];
+}
+
+function playerFlagIcons(id) {
+  const flags = getPlayerFlags(id);
+  if (!flags.length) return '';
+  return ' ' + flags.map(fl => fl === 'unknown' ? '❓' : fl === 'danger' ? '⚠️' : fl === 'wildcard' ? '🃏' : '').join('');
+}
+
+function formatMatchType(type) {
+  if (type === 'champions_pairing') return '👑 Champion\'s Pairing';
+  if (type === 'refused_vs_refused') return 'Refused vs Refused';
+  if (type === 'defender_vs_attacker') return 'Defender vs Attacker';
+  return (type || '').replace(/_/g, ' ');
+}
 
 function escHTML(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 

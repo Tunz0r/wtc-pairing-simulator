@@ -515,6 +515,68 @@ details[open] .matrix-ref-toggle::before {
   font-weight: 700;
 }
 
+/* What-If Mode */
+.whatif-banner {
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: rgba(156, 39, 176, 0.15);
+  border: 2px solid rgba(156, 39, 176, 0.5);
+  border-radius: var(--radius);
+  color: #ce93d8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  animation: whatifPulse 2s ease infinite;
+}
+
+.whatif-icon { font-size: 1.1rem; margin-right: 6px; }
+
+@keyframes whatifPulse {
+  0%, 100% { border-color: rgba(156, 39, 176, 0.5); }
+  50% { border-color: rgba(156, 39, 176, 0.9); }
+}
+
+.whatif-active .pairing-board,
+.whatif-active .action-panel {
+  outline: 2px dashed rgba(156, 39, 176, 0.4);
+  outline-offset: 4px;
+}
+
+/* Opponent Flags */
+.opp-flags {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.flag-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0.4;
+  line-height: 1;
+}
+
+.flag-btn:hover { opacity: 0.7; border-color: var(--accent); }
+.flag-btn.active {
+  opacity: 1;
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.matrix-flags {
+  display: block;
+  font-size: 0.65rem;
+  line-height: 1;
+  margin-top: 2px;
+}
+
 /* Live matrix reference highlights */
 .ref-dimmed { opacity: 0.25 !important; }
 .ref-matched-header { opacity: 0.5; text-decoration: line-through; }
@@ -950,6 +1012,16 @@ details[open] .matrix-ref-toggle::before {
 .match-map { font-size: 0.7rem; color: var(--text-secondary); }
 .match-mission { font-size: 0.7rem; color: var(--text-secondary); }
 .match-type { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+.match-type-champion {
+  color: #ffd600 !important;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: none;
+}
+.type-badge-champion {
+  color: #ffd600;
+  font-weight: 700;
+}
 
 /* Match estimate + volatility in pairing board */
 .match-estimate {
