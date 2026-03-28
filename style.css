@@ -25,6 +25,7 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
 body {
   background: var(--bg-dark);
@@ -32,6 +33,7 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   min-height: 100vh;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 /* ===========================
@@ -1477,43 +1479,457 @@ details[open] .matrix-ref-toggle::before {
   font-family: 'Courier New', monospace;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
+/* ===========================
+   Responsive — Laptop (≤1200px)
+   =========================== */
+@media (max-width: 1200px) {
   .pairing-layout {
     grid-template-columns: 1fr;
   }
-
+  .action-panel {
+    max-height: none;
+  }
   .tables-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .algo-strategy {
+    grid-template-columns: 1fr;
+  }
+  .algo-summary {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
+/* ===========================
+   Responsive — Tablet (≤768px)
+   =========================== */
 @media (max-width: 768px) {
-  .setup-grid {
-    grid-template-columns: 1fr;
+  #app {
+    padding: 12px;
+  }
+  header {
+    padding: 16px 0 12px;
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-size: 1.3rem;
+  }
+  .subtitle {
+    font-size: 0.78rem;
   }
 
-  .tables-grid {
-    grid-template-columns: 1fr;
-  }
-
+  /* Nav — horizontal scroll, no wrap */
   #phase-nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 3px;
+    scrollbar-width: none;
+  }
+  #phase-nav::-webkit-scrollbar { display: none; }
+  .phase-btn {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  /* General spacing */
+  .phase-desc { font-size: 0.85rem; margin-bottom: 14px; }
+  .phase-actions { flex-wrap: wrap; gap: 8px; padding: 14px 0; }
+  .btn { padding: 10px 16px; font-size: 0.82rem; }
+
+  /* Team setup */
+  .setup-grid { grid-template-columns: 1fr; }
+  .team-setup { padding: 14px; }
+  .team-setup h2 { font-size: 1rem; }
+  #phase-myteam .team-setup { max-width: 100%; }
+
+  /* Player rows */
+  .player-row { gap: 6px; }
+  .player-faction { font-size: 0.8rem; padding: 7px 8px; }
+  .btn-list-toggle { width: 36px; height: 36px; }
+
+  /* Config rows: stack vertically */
+  .round-config-row {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .config-field-btn { flex-direction: row; }
+  .config-field-btn label { display: none; }
+
+  /* Tables grid */
+  .tables-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .table-card { padding: 10px; }
+  .table-card h3 { font-size: 0.8rem; }
+  .table-map-name { font-size: 0.78rem; }
+
+  /* Prep country bar */
+  .prep-country-bar {
     flex-wrap: wrap;
   }
-
-  .phase-btn {
-    font-size: 0.75rem;
-    padding: 8px 10px;
+  .prep-country-bar select {
+    min-width: 0;
+    flex: 1 1 100%;
   }
 
+  /* Matrix — scrollable container */
+  .matrix-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  .matchup-matrix { min-width: 520px; }
+  .matchup-matrix th.col-header {
+    height: 70px;
+    min-width: 56px;
+    font-size: 0.68rem;
+    padding: 4px 2px;
+  }
+  .matchup-matrix th.row-header {
+    padding: 6px 6px;
+    font-size: 0.72rem;
+    max-width: 100px;
+  }
+  .matchup-matrix td {
+    width: 56px;
+    height: 48px;
+    padding: 2px;
+  }
+  .matrix-input { font-size: 0.9rem; height: 24px; }
+  .matrix-vol { font-size: 0.68rem; height: 20px; }
+  .matrix-section { padding: 14px; }
+  .matrix-section h2 { font-size: 0.95rem; }
+
+  /* Table prefs panel */
+  .tp-buttons {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .tp-btn { padding: 6px 2px; }
+  .tp-btn strong { font-size: 0.72rem; }
+  .tp-btn small { font-size: 0.5rem; }
+
+  /* Algo actions */
+  .algo-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .algo-summary {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .algo-stat { padding: 10px 8px; }
+  .algo-stat-value { font-size: 1.2rem; }
+
+  /* Pairing board */
+  .pairing-board { padding: 14px; }
+  .header-cell { font-size: 0.9rem; }
+  .match-row {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+  }
+  .match-player strong { font-size: 0.8rem; }
+  .match-info { min-width: auto; }
+  .match-number { font-size: 0.75rem; }
+
+  /* Round selector */
+  .round-selector-bar { gap: 3px; padding: 4px; }
+  .round-num-btn { padding: 8px 4px; font-size: 0.75rem; }
+
+  /* Round prefill */
+  .round-prefill-bar { flex-direction: column; align-items: stretch; text-align: center; }
+
+  /* Coaching table */
+  .coaching-table-wrap { -webkit-overflow-scrolling: touch; }
+  .coaching-table { min-width: 700px; font-size: 0.75rem; }
+  .coaching-table th, .coaching-table td { padding: 6px 4px; }
+  .coaching-table .match-cell { min-width: 140px; font-size: 0.72rem; }
+  .coaching-br-input { width: 40px; font-size: 0.78rem; padding: 5px 2px; }
+
+  /* Win tracker */
+  .win-tracker { padding: 12px 14px; }
+  .win-tracker-current { font-size: 1.1rem; }
+  .win-tracker-info { font-size: 0.82rem; }
+
+  /* Directive buttons */
+  .dir-btn { width: 28px; height: 28px; font-size: 0.8rem; }
+  .directive-cell { min-width: 80px; }
+
+  /* Coaching header */
+  .coaching-header { flex-direction: column; align-items: stretch; gap: 8px; }
+  .coaching-controls { justify-content: space-between; }
+
+  /* Table Prefs tab */
+  .tp-tags-grid { grid-template-columns: 1fr; }
+  .tp-army-grid { min-width: 560px; }
+  .tp-army-grid th, .tp-army-grid td { padding: 4px 4px; font-size: 0.72rem; }
+  .tp-grid-army-header { width: 100px; min-width: 90px; }
+  .tp-grid-cell { font-size: 0.85rem; }
+
+  /* Overview */
+  .overview-meta { flex-wrap: wrap; gap: 8px 16px; font-size: 0.8rem; }
+
+  /* Map tooltip — smaller on tablet */
+  .map-tooltip { max-width: 320px; }
+
+  /* Action panel */
+  .action-panel { padding: 14px; }
+  .sel-btn { padding: 8px 10px; font-size: 0.78rem; }
+}
+
+/* ===========================
+   Responsive — Mobile (≤480px)
+   =========================== */
+@media (max-width: 480px) {
+  #app {
+    padding: 8px;
+  }
+  header {
+    padding: 12px 0 8px;
+    margin-bottom: 10px;
+  }
   header h1 {
-    font-size: 1.4rem;
+    font-size: 1rem;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    font-size: 0.7rem;
+  }
+  .sync-badge {
+    display: block;
+    margin: 4px auto 0;
+    font-size: 0.6rem;
   }
 
+  /* Nav — compact pill buttons */
+  #phase-nav {
+    padding: 2px;
+    gap: 1px;
+  }
+  .phase-btn {
+    font-size: 0.62rem;
+    padding: 7px 8px;
+    letter-spacing: -0.3px;
+  }
+
+  /* Buttons */
+  .btn { padding: 9px 12px; font-size: 0.78rem; }
+  .phase-actions { gap: 6px; }
+
+  /* Team setup */
+  .team-setup { padding: 10px; }
+  .team-name-input { font-size: 0.9rem; padding: 8px 10px; }
+  .player-row { gap: 4px; margin-bottom: 6px; }
+  .player-num { width: 18px; font-size: 0.75rem; }
+  .player-faction { font-size: 0.75rem; padding: 6px 6px; }
+  .btn-list-toggle { width: 32px; height: 32px; font-size: 0.8rem; }
+  .army-list-wrap { padding: 2px 0 6px 22px; }
+  .army-list-input { font-size: 0.68rem; padding: 6px 8px; }
+
+  /* Prep */
+  .prep-header h2 { font-size: 1.1rem; }
+  .prep-country-bar select { font-size: 0.85rem; padding: 8px 10px; }
+
+  /* Matrix — tighter on mobile */
+  .matchup-matrix { min-width: 440px; }
+  .matchup-matrix th.col-header {
+    height: 56px;
+    min-width: 44px;
+    font-size: 0.6rem;
+    padding: 3px 1px;
+  }
+  .matchup-matrix th.row-header {
+    padding: 4px 4px;
+    font-size: 0.65rem;
+    max-width: 72px;
+  }
+  .matchup-matrix td {
+    width: 44px;
+    height: 40px;
+    padding: 1px;
+  }
+  .matrix-input { font-size: 0.82rem; height: 22px; padding: 2px 1px 0; }
+  .matrix-vol { font-size: 0.6rem; height: 18px; padding: 2px 1px; }
+  .matrix-vol::placeholder { font-size: 0.55rem; }
+  .matrix-section { padding: 10px; margin-top: 16px; }
+  .matrix-section h2 { font-size: 0.88rem; }
+  .matrix-legend { gap: 4px; margin-bottom: 10px; }
+  .legend-item { padding: 2px 6px; font-size: 0.6rem; }
+
+  /* Table prefs panel — stack 4 columns */
+  .tp-buttons {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+  }
+  .tp-btn { padding: 4px 2px; }
+  .tp-btn strong { font-size: 0.65rem; }
+  .tp-btn small { font-size: 0.45rem; }
+  .tp-state { font-size: 0.85rem; }
+  .table-prefs-panel { padding: 10px; }
+  .tp-header { font-size: 0.8rem; gap: 4px; }
+
+  /* Tables grid — single column */
+  .tables-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .table-card { padding: 8px; }
+
+  /* Round selector */
+  .round-selector-bar { gap: 2px; padding: 3px; }
+  .round-num-btn { padding: 7px 2px; font-size: 0.7rem; }
+
+  /* Round config */
+  .round-config-section { padding: 12px; margin-top: 16px; }
+  .round-config-section h2 { font-size: 0.95rem; }
+  .config-field label { font-size: 0.7rem; margin-bottom: 5px; }
+  .config-field select { padding: 9px 10px; font-size: 0.85rem; }
+
+  /* Pairing board — compact */
+  .pairing-board { padding: 10px; }
+  .board-header-row { gap: 10px; margin-bottom: 12px; padding-bottom: 10px; }
+  .header-cell { font-size: 0.82rem; }
+  .versus { font-size: 0.75rem; }
   .match-row {
     grid-template-columns: 1fr;
     text-align: center;
+    gap: 4px;
+    padding: 6px;
+    margin-bottom: 4px;
   }
+  .match-player { padding: 5px 8px; }
+  .match-player strong { font-size: 0.78rem; }
+  .faction-tag { font-size: 0.68rem; }
+  .match-info { min-width: auto; }
+  .match-number { font-size: 0.72rem; }
+  .match-table { font-size: 0.72rem; }
+  .match-map, .match-mission { font-size: 0.65rem; }
+  .match-estimate { font-size: 0.88rem; padding: 1px 6px; }
+
+  /* Available pools */
+  .available-row { grid-template-columns: 1fr; gap: 6px; }
+  .pool-player { padding: 4px 8px; font-size: 0.72rem; }
+  .pool-player strong { font-size: 0.72rem; }
+  .pool-player span { font-size: 0.65rem; }
+
+  /* Action panel */
+  .action-panel { padding: 10px; }
+  .select-panel { padding: 10px; }
+  .select-panel h3 { font-size: 0.78rem; }
+  .sel-btn { padding: 7px 8px; font-size: 0.75rem; }
+  .sel-hint { font-size: 0.68rem; }
+  .roll-buttons { flex-direction: column; gap: 8px; }
+  .roll-buttons .btn { width: 100%; }
+  .btn-team-a, .btn-team-b { padding: 12px 20px; font-size: 0.88rem; }
+  .table-btn { padding: 8px 10px; }
+  .table-btn strong { font-size: 0.8rem; }
+  .table-btn span { font-size: 0.68rem; }
+
+  /* Coaching */
+  .coaching-header h2 { font-size: 1rem; }
+  .coaching-controls { flex-wrap: wrap; gap: 6px; }
+  .coaching-controls select { font-size: 0.78rem; padding: 7px 8px; flex: 1; }
+  .coaching-controls .btn { font-size: 0.72rem; padding: 7px 10px; }
+  .coaching-table { min-width: 600px; font-size: 0.7rem; }
+  .coaching-table th { font-size: 0.65rem; padding: 5px 3px; }
+  .coaching-table td { padding: 5px 3px; }
+  .coaching-table .match-cell { min-width: 110px; font-size: 0.65rem; padding: 4px 6px; }
+  .coaching-br-input { width: 36px; font-size: 0.72rem; padding: 4px 1px; }
+
+  /* Win tracker compact */
+  .win-tracker { padding: 10px 12px; margin-bottom: 10px; }
+  .win-tracker-bar { height: 22px; }
+  .win-target-label { font-size: 0.58rem; top: -16px; }
+  .win-tracker-current { font-size: 1rem; }
+  .win-tracker-info { font-size: 0.78rem; flex-wrap: wrap; gap: 4px; }
+  .win-tracker-delta { font-size: 0.78rem; padding: 1px 8px; }
+  .win-tracker-needs { font-size: 0.72rem; }
+
+  /* Directives */
+  .dir-btn { width: 26px; height: 26px; font-size: 0.75rem; }
+  .directive-cell { min-width: 70px; }
+
+  /* Table Prefs tab */
+  .tp-tab-title { font-size: 1.1rem; }
+  .tp-tables-section, .tp-army-section { padding: 12px; }
+  .tp-tag-card { padding: 8px; }
+  .tp-tag-btn { font-size: 0.65rem; padding: 2px 6px; }
+  .tp-army-grid { min-width: 440px; }
+  .tp-grid-army-header { width: 80px; min-width: 70px; font-size: 0.65rem; }
+  .tp-grid-cell { font-size: 0.8rem; }
+
+  /* Algo results */
+  .algo-summary { grid-template-columns: 1fr; }
+  .algo-stat-value { font-size: 1.3rem; }
+  .algo-table th { font-size: 0.68rem; padding: 5px 6px; }
+  .algo-table td { font-size: 0.78rem; padding: 5px 6px; }
+
+  /* Overview */
+  .overview-round-card { padding: 12px; }
+  .overview-round-card h3 { font-size: 0.88rem; }
+  .overview-meta { gap: 4px 12px; font-size: 0.72rem; }
+  .overview-match-table th { font-size: 0.62rem; padding: 5px 4px; }
+  .overview-match-table td { font-size: 0.72rem; padding: 4px 4px; }
+
+  /* Map tooltip — fits phone screen */
+  .map-tooltip { max-width: 260px; padding: 4px; }
+  .map-tooltip-label { font-size: 0.65rem; }
+
+  /* List tooltip */
+  .list-tooltip { max-width: 280px; padding: 8px 10px; }
+  .list-tooltip-header { font-size: 0.78rem; }
+  .list-tooltip-body { font-size: 0.62rem; max-height: 300px; }
+
+  /* Event log */
+  .event-log { padding: 12px; }
+  .event-log h3 { font-size: 0.78rem; }
+  .log-entry { font-size: 0.7rem; }
+
+  /* Coaching share modal */
+  .coaching-share-content { padding: 16px; }
+  .coaching-share-content h3 { font-size: 0.95rem; }
+  .coaching-share-content textarea { height: 80px; font-size: 0.68rem; }
+
+  /* What-If banner */
+  .whatif-banner { font-size: 0.75rem; padding: 8px 10px; }
+
+  /* Complete section */
+  .complete-section { padding: 24px 12px; }
+  .complete-section h3 { font-size: 1rem; }
+
+  /* Login card */
+  .login-card { padding: 32px 24px; }
+  .login-logo { font-size: 2.5rem; }
+  .login-title { font-size: 1.2rem; }
+}
+
+/* ===========================
+   Touch-friendly helpers
+   =========================== */
+.matrix-scroll,
+.coaching-table-wrap,
+.tp-army-grid-wrap {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* Ensure tap targets are at least 44px on touch */
+@media (pointer: coarse) {
+  .flag-btn { width: 36px; height: 36px; }
+  .tp-tag-btn { min-height: 32px; padding: 5px 10px; }
+  .tp-grid-cell { min-height: 36px; }
+  .sel-btn { min-height: 44px; }
+  .table-btn { min-height: 44px; }
+  .round-num-btn { min-height: 40px; }
+  .phase-btn { min-height: 40px; }
+  .dir-btn { width: 36px; height: 36px; }
 }
 
 /* Map tooltip */
