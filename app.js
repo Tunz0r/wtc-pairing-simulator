@@ -102,8 +102,11 @@ function debouncedSaveState() {
 // ===========================
 
 function buildMyTeamInputs() {
-  const container = document.getElementById('my-team-players');
-  container.innerHTML = '';
+  // Clone container to remove stale event listeners from previous renders
+  const oldContainer = document.getElementById('my-team-players');
+  const container = oldContainer.cloneNode(false);
+  oldContainer.parentNode.replaceChild(container, oldContainer);
+
   appState.myTeam.name = 'Denmark';
   document.getElementById('my-team-name').value = 'Denmark';
 
@@ -127,19 +130,20 @@ function buildMyTeamInputs() {
   addListToggle(container);
   ensureFactionDatalist();
 
-  // Auto-save on change
+  // Auto-save on change (fresh listeners, no stacking)
   container.addEventListener('input', () => { collectMyTeam(); debouncedSaveState(); });
-  document.getElementById('my-team-name').addEventListener('input', () => { collectMyTeam(); debouncedSaveState(); });
 
-  document.getElementById('btn-fill-my-team').addEventListener('click', () => {
-    fillDummyMyTeam();
-    buildMyTeamInputs();
-  });
-  document.getElementById('btn-save-my-team').addEventListener('click', () => {
-    collectMyTeam();
-    saveState();
-    showToast('Team saved!');
-  });
+  // These only need binding once, guard against stacking
+  const nameInput = document.getElementById('my-team-name');
+  const saveBtn = document.getElementById('btn-save-my-team');
+  if (!nameInput._bound) {
+    nameInput.addEventListener('input', () => { collectMyTeam(); debouncedSaveState(); });
+    nameInput._bound = true;
+  }
+  if (!saveBtn._bound) {
+    saveBtn.addEventListener('click', () => { collectMyTeam(); saveState(); showToast('Team saved!'); });
+    saveBtn._bound = true;
+  }
 }
 
 function collectMyTeam() {
@@ -213,8 +217,10 @@ function renderTablePrefsTab() {
 }
 
 function renderTableTagsGrid(dep, maps) {
-  const grid = document.getElementById('tp-tags-grid');
-  const tags = appState.tableTags[dep];
+  const oldGrid = document.getElementById('tp-tags-grid');
+  // Clone to remove stale event listeners
+  const grid = oldGrid.cloneNode(false);
+  oldGrid.parentNode.replaceChild(grid, oldGrid);
 
   let html = '';
   for (let t = 0; t < 8; t++) {
@@ -222,7 +228,7 @@ function renderTableTagsGrid(dep, maps) {
     const map = maps ? maps[mapIdx] : null;
     const mapName = map ? map.name : `Table ${t + 1}`;
     const mapId = map ? map.id : null;
-    const activeTags = tags[t] || [];
+    const activeTags = (appState.tableTags[dep] && appState.tableTags[dep][t]) || [];
 
     html += `
       <div class="tp-tag-card">
@@ -241,12 +247,13 @@ function renderTableTagsGrid(dep, maps) {
   }
   grid.innerHTML = html;
 
-  // Bind tag toggle
+  // Bind tag toggle (fresh listener, no stacking)
   grid.addEventListener('click', (e) => {
     const btn = e.target.closest('.tp-tag-btn');
     if (!btn) return;
     const t = parseInt(btn.dataset.table);
     const tagId = btn.dataset.tag;
+    const tags = appState.tableTags[dep];
     if (!tags[t]) tags[t] = [];
     const idx = tags[t].indexOf(tagId);
     if (idx >= 0) { tags[t].splice(idx, 1); btn.classList.remove('active'); }
@@ -257,7 +264,10 @@ function renderTableTagsGrid(dep, maps) {
 
 function renderArmyPrefsGrid(dep, maps) {
   const thead = document.getElementById('tp-army-grid-head');
-  const tbody = document.getElementById('tp-army-grid-body');
+  // Clone tbody to remove stale event listeners
+  const oldTbody = document.getElementById('tp-army-grid-body');
+  const tbody = oldTbody.cloneNode(false);
+  oldTbody.parentNode.replaceChild(tbody, oldTbody);
   const prefs = appState.armyTablePrefs[dep];
   const tags = appState.tableTags[dep] || {};
 
@@ -313,11 +323,12 @@ function renderArmyPrefsGrid(dep, maps) {
     if (!td) return;
     const faction = td.dataset.faction;
     const t = parseInt(td.dataset.table);
-    if (!prefs[faction]) prefs[faction] = {};
-    const current = prefs[faction][t] || 'neutral';
+    const currentPrefs = appState.armyTablePrefs[dep];
+    if (!currentPrefs[faction]) currentPrefs[faction] = {};
+    const current = currentPrefs[faction][t] || 'neutral';
     const next = current === 'neutral' ? 'good' : current === 'good' ? 'bad' : 'neutral';
-    if (next === 'neutral') delete prefs[faction][t];
-    else prefs[faction][t] = next;
+    if (next === 'neutral') delete currentPrefs[faction][t];
+    else currentPrefs[faction][t] = next;
 
     td.className = 'tp-grid-cell ' + (next === 'good' ? 'tp-cell-good' : next === 'bad' ? 'tp-cell-bad' : 'tp-cell-neutral');
     td.textContent = next === 'good' ? '▲' : next === 'bad' ? '▼' : '—';
@@ -368,8 +379,6 @@ function buildPrepUI() {
   document.getElementById('btn-remove-country').addEventListener('click', removeCountry);
   document.getElementById('prep-country-select').addEventListener('change', onPrepCountryChange);
   document.getElementById('prep-deployment').addEventListener('change', () => { if (currentPrepCountry) renderPrepMatrix(); });
-  document.getElementById('btn-fill-matrix').addEventListener('click', () => { if (currentPrepCountry) fillDummyPrepMatrix(); });
-  document.getElementById('btn-fill-opp-team').addEventListener('click', () => { if (currentPrepCountry) fillDummyOppTeam(); });
   document.getElementById('btn-run-algo').addEventListener('click', () => { if (currentPrepCountry) runOptimalPairing('prep'); });
   document.getElementById('btn-save-prep').addEventListener('click', () => { collectPrepData(); saveState(); showToast('Prep saved!'); });
 }
@@ -483,8 +492,11 @@ function onPrepCountryChange() {
 }
 
 function buildOppTeamInputs() {
-  const container = document.getElementById('opp-team-players');
-  container.innerHTML = '';
+  // Clone container to remove stale event listeners
+  const oldContainer = document.getElementById('opp-team-players');
+  const container = oldContainer.cloneNode(false);
+  oldContainer.parentNode.replaceChild(container, oldContainer);
+
   const opp = appState.opponents[currentPrepCountry];
 
   for (let i = 0; i < 8; i++) {
@@ -512,14 +524,15 @@ function buildOppTeamInputs() {
 
   addListToggle(container);
 
-  // Flag toggle handlers
+  // Flag toggle handlers (fresh listener, no stacking)
   container.addEventListener('click', (e) => {
     const flagBtn = e.target.closest('.flag-btn');
     if (!flagBtn) return;
     const idx = parseInt(flagBtn.dataset.idx);
     const flag = flagBtn.dataset.flag;
-    if (!opp.players[idx].flags) opp.players[idx].flags = [];
-    const arr = opp.players[idx].flags;
+    const currentOpp = appState.opponents[currentPrepCountry];
+    if (!currentOpp.players[idx].flags) currentOpp.players[idx].flags = [];
+    const arr = currentOpp.players[idx].flags;
     const pos = arr.indexOf(flag);
     if (pos >= 0) { arr.splice(pos, 1); flagBtn.classList.remove('active'); }
     else { arr.push(flag); flagBtn.classList.add('active'); }
@@ -2422,12 +2435,12 @@ function showToast(msg) {
 }
 
 function addListToggle(container) {
-  container.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-list-toggle');
-    if (!btn) return;
-    const targetId = btn.dataset.target;
-    const wrap = document.getElementById(targetId.replace('list-', 'list-wrap-'));
-    if (wrap) { const isOpen = wrap.style.display !== 'none'; wrap.style.display = isOpen ? 'none' : ''; btn.classList.toggle('active', !isOpen); }
+  container.querySelectorAll('.btn-list-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const wrap = document.getElementById(targetId.replace('list-', 'list-wrap-'));
+      if (wrap) { const isOpen = wrap.style.display !== 'none'; wrap.style.display = isOpen ? 'none' : ''; btn.classList.toggle('active', !isOpen); }
+    });
   });
 }
 
