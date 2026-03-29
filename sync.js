@@ -148,12 +148,25 @@ function rerenderCurrentView() {
   const activePhase = document.querySelector('.phase.active');
   if (!activePhase) return;
   const id = activePhase.id.replace('phase-', '');
+
+  // Don't re-render if user is actively editing an input/textarea
+  const active = document.activeElement;
+  const isEditing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
+
   try {
-    if (id === 'myteam') buildMyTeamInputs();
-    if (id === 'tableprefs') renderTablePrefsTab();
-    if (id === 'prep') { populateCountryDropdown(); if (currentPrepCountry) renderPrepMatrix(); }
-    if (id === 'round') { populateRoundOpponents(); buildRoundMatrix(); updateTablesPreview(); }
-    if (id === 'coaching') { populateCoachingRoundSelect(); renderCoachingTab(); }
+    // My Team: only re-render if user is NOT on this tab or not editing
+    // (rebuilding DOM while editing loses focus, army-list toggle state, etc.)
+    if (id === 'myteam' && !isEditing) buildMyTeamInputs();
+    if (id === 'tableprefs' && !isEditing) renderTablePrefsTab();
+    if (id === 'prep') {
+      populateCountryDropdown();
+      if (currentPrepCountry && !isEditing) renderPrepMatrix();
+    }
+    if (id === 'round' && !isEditing) { populateRoundOpponents(); buildRoundMatrix(); updateTablesPreview(); }
+    if (id === 'coaching') {
+      populateCoachingRoundSelect();
+      if (!isEditing) renderCoachingTab();
+    }
     if (id === 'overview') renderOverview();
   } catch (e) {
     console.warn('[Sync] Re-render error:', e);

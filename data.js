@@ -3,6 +3,7 @@ const WTC_DEPLOYMENTS = [
   'Hammer and Anvil',
   'Crucible of Battle',
   'Search and Destroy',
+  'Tipping Point',
 ];
 
 // BETA deployments (optional)
@@ -38,6 +39,15 @@ const WTC_MAPS = {
     { id: 'sd6', name: 'Search and Destroy 6' },
     { id: 'sd7', name: 'Search and Destroy 7' },
     { id: 'sd8', name: 'Search and Destroy 8' },
+  ],
+  'Tipping Point': [
+    { id: 'tp1', name: 'Tipping Point 1' },
+    { id: 'tp2', name: 'Tipping Point 2' },
+    { id: 'tp3', name: 'Tipping Point 3' },
+    { id: 'tp45', name: 'Tipping Point 4-5' },
+    { id: 'tp6', name: 'Tipping Point 6' },
+    { id: 'tp7', name: 'Tipping Point 7' },
+    { id: 'tp8', name: 'Tipping Point 8' },
   ],
   'Dawn of War': [
     { id: 'dow1', name: 'Dawn of War 1' },

@@ -49,6 +49,42 @@ function init() {
   bindNavigation();
   initMapTooltip();
   renderOverview();
+  initResetButton();
+}
+
+function initResetButton() {
+  const btn = document.getElementById('btn-reset-data');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const confirmMsg = 'Reset ALL data?\n\nThis will clear:\n• All opponent prep (matchups, volatility, table prefs)\n• All round data\n• Table tags & army table preferences\n• Coaching scores\n\nYour team roster will be kept.\n\nThis cannot be undone.';
+    if (!confirm(confirmMsg)) return;
+
+    // Preserve team roster
+    const myTeam = JSON.parse(JSON.stringify(appState.myTeam));
+
+    // Wipe everything
+    appState.opponents = {};
+    appState.rounds = Array(7).fill(null);
+    appState.tableTags = {};
+    appState.armyTablePrefs = {};
+    appState.myTeam = myTeam;
+
+    // Clear coaching
+    localStorage.setItem(COACHING_STORAGE_KEY, '{}');
+
+    saveState();
+
+    // Push to Firebase
+    if (typeof _db !== 'undefined' && _db) {
+      _db.ref('dk-team/state').set(JSON.parse(JSON.stringify(appState)));
+      _db.ref('dk-team/coaching').set({});
+    }
+
+    // Re-render
+    buildMyTeamInputs();
+    showPhase('myteam');
+    showToast('All data has been reset.');
+  });
 }
 
 // --- Boot: login gate first, then init ---
@@ -155,14 +191,6 @@ function collectMyTeam() {
       faction: document.getElementById(`my-faction-${i}`).value.trim(),
       armyList: document.getElementById(`my-list-${i}`).value.trim(),
     };
-  }
-}
-
-function fillDummyMyTeam() {
-  const factions = pickTeamFactions();
-  appState.myTeam.name = 'Denmark';
-  for (let i = 0; i < 8; i++) {
-    appState.myTeam.players[i] = { faction: factions[i], armyList: '' };
   }
 }
 
@@ -557,30 +585,6 @@ function collectPrepData() {
       flags: existingFlags,
     };
   }
-}
-
-function fillDummyOppTeam() {
-  if (!currentPrepCountry) return;
-  const factions = pickTeamFactions();
-  const opp = appState.opponents[currentPrepCountry];
-  for (let i = 0; i < 8; i++) {
-    opp.players[i] = { faction: factions[i], armyList: '' };
-  }
-  buildOppTeamInputs();
-  renderPrepMatrix();
-}
-
-function fillDummyPrepMatrix() {
-  if (!currentPrepCountry) return;
-  const opp = appState.opponents[currentPrepCountry];
-  opp.matchups = {};
-  for (let i = 0; i < 8; i++) {
-    for (let j = 0; j < 8; j++) {
-      const key = `${i}_${j}`;
-      opp.matchups[key] = { score: randomScore(), volatility: Math.random() < 0.1 ? 1 + Math.floor(Math.random() * 5) : 0 };
-    }
-  }
-  renderPrepMatrix();
 }
 
 // --- Prep Matrix ---

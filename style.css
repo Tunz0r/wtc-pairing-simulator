@@ -147,6 +147,28 @@ body {
   border: 1px solid var(--border);
 }
 
+/* Reset Data Button */
+.btn-reset-data {
+  display: block;
+  margin: 10px auto 0;
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid rgba(229, 57, 53, 0.3);
+  border-radius: var(--radius);
+  color: #ef5350;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.6;
+}
+.btn-reset-data:hover {
+  opacity: 1;
+  background: rgba(229, 57, 53, 0.1);
+  border-color: #ef5350;
+}
+
 #app {
   max-width: 1400px;
   margin: 0 auto;
