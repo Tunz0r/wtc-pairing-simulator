@@ -481,35 +481,136 @@ function populateCountryDropdown() {
   const current = sel.value;
   sel.innerHTML = '<option value="">— Select Opponent Country —</option>';
 
-  // Countries that have prep data
-  const prepped = Object.keys(appState.opponents).sort();
-  if (prepped.length > 0) {
-    const grp = document.createElement('optgroup');
-    grp.label = 'Prepped Opponents';
-    prepped.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c; opt.textContent = c;
-      grp.appendChild(opt);
-    });
-    sel.appendChild(grp);
-  }
-
-  // All WTC countries not yet prepped
-  if (typeof WTC_COUNTRIES !== 'undefined') {
-    const unprepped = WTC_COUNTRIES.filter(c => !appState.opponents[c]);
-    if (unprepped.length > 0) {
-      const grp2 = document.createElement('optgroup');
-      grp2.label = 'All WTC Countries';
-      unprepped.forEach(c => {
+  // Group countries by tier
+  if (typeof WTC_TIERS !== 'undefined') {
+    for (const tier of [1, 2, 3, 4, 5]) {
+      const teams = WTC_TIERS[tier] || [];
+      if (teams.length === 0) continue;
+      // Filter out Denmark (our own team)
+      const available = teams.filter(c => c !== 'Denmark');
+      if (available.length === 0) continue;
+      const grp = document.createElement('optgroup');
+      grp.label = `Tier ${tier}`;
+      available.forEach(c => {
         const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        grp2.appendChild(opt);
+        opt.value = c;
+        const hasPrep = appState.opponents[c];
+        const progress = hasPrep ? getCountryPrepProgress(c) : null;
+        let label = c;
+        if (progress && progress.pct > 0) label += ` (${progress.pct}%${progress.hasTablePrefs ? ' 📋' : ''})`;
+        opt.textContent = label;
+        if (hasPrep) opt.style.fontWeight = 'bold';
+        grp.appendChild(opt);
       });
-      sel.appendChild(grp2);
+      sel.appendChild(grp);
+    }
+
+    // Any custom countries not in WTC_TIERS
+    const allTierTeams = Object.values(WTC_TIERS).flat();
+    const custom = Object.keys(appState.opponents).filter(c => !allTierTeams.includes(c)).sort();
+    if (custom.length > 0) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'Custom';
+      custom.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        const progress = getCountryPrepProgress(c);
+        let label = c;
+        if (progress.pct > 0) label += ` (${progress.pct}%${progress.hasTablePrefs ? ' 📋' : ''})`;
+        opt.textContent = label;
+        opt.style.fontWeight = 'bold';
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
     }
   }
 
   if (current) sel.value = current;
+
+  // Also render tier dashboard
+  renderTierDashboard();
+}
+
+// Calculate prep progress for a country (0-100%)
+function getCountryPrepProgress(country) {
+  const opp = appState.opponents[country];
+  if (!opp) return { pct: 0, filled: 0, total: 64, hasTablePrefs: false };
+  const matchups = opp.matchups || {};
+  let filled = 0;
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      const key = `${i}_${j}`;
+      const m = matchups[key];
+      if (m && (m.score !== undefined && m.score !== '' && m.score !== null)) filled++;
+    }
+  }
+  const tablePrefs = opp.tablePrefs || {};
+  const hasTablePrefs = Object.keys(tablePrefs).some(k => {
+    const tp = tablePrefs[k];
+    return tp && Object.keys(tp).length > 0;
+  });
+  return { pct: Math.round((filled / 64) * 100), filled, total: 64, hasTablePrefs };
+}
+
+// Render the tier progress dashboard
+function renderTierDashboard() {
+  const container = document.getElementById('tier-dashboard');
+  if (!container) return;
+
+  const tierColors = { 1: '#ef5350', 2: '#ff9800', 3: '#fdd835', 4: '#66bb6a', 5: '#78909c' };
+  const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3', 4: 'Tier 4', 5: 'Tier 5' };
+
+  let html = '';
+  for (const tier of [1, 2, 3, 4, 5]) {
+    const teams = (WTC_TIERS[tier] || []).filter(c => c !== 'Denmark');
+    if (teams.length === 0) continue;
+
+    let totalPct = 0;
+    let preppedCount = 0;
+    let teamDots = '';
+
+    teams.forEach(c => {
+      const progress = getCountryPrepProgress(c);
+      if (progress.pct > 0) preppedCount++;
+      totalPct += progress.pct;
+
+      let dotClass = 'tier-dot-empty';
+      if (progress.pct >= 100) dotClass = 'tier-dot-complete';
+      else if (progress.pct > 0) dotClass = 'tier-dot-partial';
+
+      const tpIcon = progress.hasTablePrefs ? '<span class="tier-dot-tp">📋</span>' : '';
+      teamDots += `<span class="tier-dot ${dotClass}" title="${c}: ${progress.pct}% (${progress.filled}/64 cells)${progress.hasTablePrefs ? ' + table prefs' : ''}" data-country="${c}">${tpIcon}</span>`;
+    });
+
+    const avgPct = teams.length > 0 ? Math.round(totalPct / teams.length) : 0;
+    const color = tierColors[tier];
+
+    html += `
+      <div class="tier-row" data-tier="${tier}">
+        <div class="tier-label" style="border-left: 3px solid ${color}; padding-left: 8px;">
+          <span class="tier-name">${tierLabels[tier]}</span>
+          <span class="tier-avg">${avgPct}%</span>
+        </div>
+        <div class="tier-bar-wrap">
+          <div class="tier-bar" style="width: ${avgPct}%; background: ${color};"></div>
+        </div>
+        <div class="tier-dots">${teamDots}</div>
+        <span class="tier-count">${preppedCount}/${teams.length}</span>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+
+  // Click on dots to jump to that country
+  container.querySelectorAll('.tier-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const country = dot.dataset.country;
+      const sel = document.getElementById('prep-country-select');
+      sel.value = country;
+      onPrepCountryChange();
+    });
+  });
 }
 
 function populatePrepDeployment() {
@@ -525,9 +626,10 @@ function populatePrepDeployment() {
 
 function addCountry() {
   const sel = document.getElementById('prep-country-select');
+  // If a country is already selected, just ensure data exists and open editor
   let country = sel.value;
   if (!country) {
-    country = prompt('Enter opponent country/team name:');
+    country = prompt('Enter custom team name (or select from dropdown):');
     if (!country) return;
     country = country.trim();
   }
@@ -579,7 +681,9 @@ function onPrepCountryChange() {
 
   editor.style.display = '';
   removeBtn.style.display = '';
-  document.getElementById('opp-team-title').textContent = country;
+  const tier = typeof getCountryTier === 'function' ? getCountryTier(country) : 0;
+  const tierTag = tier > 0 ? ` [Tier ${tier}]` : '';
+  document.getElementById('opp-team-title').textContent = country + tierTag;
   buildOppTeamInputs();
   renderPrepMatrix();
 }
@@ -1025,7 +1129,7 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
       }
       updateCellColor(e.target.closest('td'), val);
       updateMatrixSummary();
-      if (ctx === 'prep') debouncedSaveState();
+      if (ctx === 'prep') { debouncedSaveState(); renderTierDashboard(); }
     });
   });
 

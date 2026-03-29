@@ -174,70 +174,24 @@ const UNIQUE_FACTIONS = [
   'World Eaters',
 ];
 
-const WTC_COUNTRIES = [
-  'Argentina',
-  'Australia',
-  'Austria',
-  'Belarus',
-  'Belgium',
-  'Brazil',
-  'Bulgaria',
-  'Canada',
-  'Chile',
-  'China',
-  'Colombia',
-  'Croatia',
-  'Czech Republic',
-  'Denmark',
-  'England',
-  'Estonia',
-  'Finland',
-  'France',
-  'Germany',
-  'Greece',
-  'Hungary',
-  'Iceland',
-  'India',
-  'Indonesia',
-  'Ireland',
-  'Israel',
-  'Italy',
-  'Japan',
-  'Kazakhstan',
-  'Latvia',
-  'Lithuania',
-  'Luxembourg',
-  'Malaysia',
-  'Mexico',
-  'Netherlands',
-  'New Zealand',
-  'Nigeria',
-  'Northern Ireland',
-  'Norway',
-  'Peru',
-  'Philippines',
-  'Poland',
-  'Portugal',
-  'Romania',
-  'Russia',
-  'Scotland',
-  'Serbia',
-  'Singapore',
-  'Slovakia',
-  'Slovenia',
-  'South Africa',
-  'South Korea',
-  'Spain',
-  'Sweden',
-  'Switzerland',
-  'Taiwan',
-  'Thailand',
-  'Turkey',
-  'Ukraine',
-  'Uruguay',
-  'USA',
-  'Venezuela',
-  'Vietnam',
-  'Wales',
-];
+// WTC 2026 Team Tiers (WAPP-based pod seedings)
+// Tiers 1-4 have 10 teams each; remaining teams are Tier 5
+const WTC_TIERS = {
+  1: ['France', 'USA', 'Poland', 'Sweden', 'Germany', 'Australia', 'Austria', 'England', 'Belgium', 'Scotland'],
+  2: ['Canada', 'Netherlands', 'Italy', 'Singapore', 'Spain', 'New Zealand', 'Denmark', 'Czechia', 'Switzerland', 'Thailand'],
+  3: ['Ireland', 'Iceland', 'Portugal', 'Wales', 'Norway', 'Greece', 'Malta', 'Latvia', 'Finland', 'China'],
+  4: ['Slovakia', 'Northern Ireland', 'Israel', 'Bulgaria', 'Romania', 'Hong Kong', 'Mexico', 'Slovenia', 'South Africa', 'Luxembourg'],
+  5: ['South Korea', 'Hungary', 'Cyprus', 'Croatia', 'Andorra'],
+};
+
+// Helper: get tier for a country
+function getCountryTier(country) {
+  for (const [tier, teams] of Object.entries(WTC_TIERS)) {
+    if (teams.includes(country)) return parseInt(tier);
+  }
+  return 0; // unknown
+}
+
+// Flat list of all WTC countries (derived from tiers)
+const WTC_COUNTRIES = Object.values(WTC_TIERS).flat();
 
