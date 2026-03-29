@@ -25,6 +25,8 @@ let tablesData = [];
 let roundMatchupScores = {};
 let roundMatchupVolatility = {};
 let roundMatchupTablePrefs = {};
+let roundMatchupVolDir = {};
+let roundMatchupPreferred = {};
 
 // What-If mode
 let whatIfSnapshot = null;
@@ -748,11 +750,15 @@ function loadPrepIntoRound() {
   roundMatchupScores = {};
   roundMatchupVolatility = {};
   roundMatchupTablePrefs = {};
+  roundMatchupVolDir = {};
+  roundMatchupPreferred = {};
 
   Object.entries(opp.matchups).forEach(([key, val]) => {
     const aKey = `a${key.split('_')[0]}_b${key.split('_')[1]}`;
     roundMatchupScores[aKey] = val.score;
     if (val.volatility) roundMatchupVolatility[aKey] = val.volatility;
+    if (val.volDir) roundMatchupVolDir[aKey] = val.volDir;
+    if (val.preferred) roundMatchupPreferred[aKey] = true;
   });
   Object.entries(opp.tablePrefs || {}).forEach(([key, val]) => {
     const aKey = `a${key.split('_')[0]}_b${key.split('_')[1]}`;
@@ -840,34 +846,85 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
     const f = myPlayers[i]?.faction || '?';
     bodyHTML += `<tr><th class="row-header team-a-color" title="${escHTML(f)}">${escHTML(f)}</th>`;
     for (let j = 0; j < 8; j++) {
-      let key, score, vol;
+      let key, score, vol, volDir, preferred;
       if (context === 'prep') {
         key = `${i}_${j}`;
         const m = scores[key];
         score = m ? m.score : '';
         vol = m ? (m.volatility || '') : '';
+        volDir = m ? (m.volDir || 'both') : 'both';
+        preferred = m ? (m.preferred || false) : false;
       } else {
         key = `a${i}_b${j}`;
         score = scores[key] !== undefined ? scores[key] : '';
         vol = roundMatchupVolatility[key] !== undefined ? roundMatchupVolatility[key] : '';
+        volDir = roundMatchupVolDir[key] || 'both';
+        preferred = roundMatchupPreferred[key] || false;
       }
       const cls = getMatrixCellClass(score);
       const hasTP = tablePrefs[context === 'prep' ? `${i}_${j}` : key] &&
                     Object.keys(tablePrefs[context === 'prep' ? `${i}_${j}` : key]).length > 0;
       const tpDot = hasTP ? '<span class="tp-dot" title="Has table preferences">&#9679;</span>' : '';
+      const prefStar = preferred ? '<span class="pref-star" title="Preferred matchup">&#11088;</span>' : '';
       const dataKey = context === 'prep' ? `${i}_${j}` : `a${i}_b${j}`;
+      const dirSymbol = volDir === 'up' ? '↑' : volDir === 'down' ? '↓' : '±';
+      const volPlaceholder = dirSymbol + ' vol';
 
       bodyHTML += `<td class="${cls}" data-key="${dataKey}" data-ctx="${context}">
         <div class="cell-inputs">
           <input type="number" class="matrix-input" data-key="${dataKey}" data-ctx="${context}" min="0" max="20" value="${score}" placeholder="—" title="Expected score (0-20)">
-          <input type="number" class="matrix-vol" data-key="${dataKey}" data-ctx="${context}" min="0" max="5" value="${vol}" placeholder="± vol" title="Volatility (0-5)">
+          <span class="vol-wrapper" style="display:flex;align-items:center;width:100%">
+            <input type="number" class="matrix-vol" data-key="${dataKey}" data-ctx="${context}" min="0" max="5" value="${vol}" placeholder="${volPlaceholder}" title="Volatility (0-5)" style="flex:1;min-width:0">
+            <button class="vol-dir-btn" data-key="${dataKey}" data-ctx="${context}" title="Click to cycle direction: ± → ↑ → ↓">${dirSymbol}</button>
+          </span>
         </div>
-        ${tpDot}
+        ${prefStar}${tpDot}
       </td>`;
     }
     bodyHTML += '</tr>';
   }
   tbody.innerHTML = bodyHTML;
+
+  // --- Matrix summary div ---
+  const summaryId = tbodyId + '-summary';
+  let summaryDiv = document.getElementById(summaryId);
+  if (!summaryDiv) {
+    summaryDiv = document.createElement('div');
+    summaryDiv.id = summaryId;
+    summaryDiv.className = 'matrix-summary';
+    // Insert after the matrix-scroll parent
+    const scrollParent = tbody.closest('.matrix-scroll');
+    if (scrollParent) scrollParent.parentNode.insertBefore(summaryDiv, scrollParent.nextSibling);
+  }
+
+  function updateMatrixSummary() {
+    let total = 0, count = 0;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        let k, val;
+        if (context === 'prep') {
+          k = `${r}_${c}`;
+          const m = scores[k];
+          val = m ? m.score : '';
+        } else {
+          k = `a${r}_b${c}`;
+          val = scores[k] !== undefined ? scores[k] : '';
+        }
+        if (val !== '' && val !== undefined && val !== null) {
+          total += parseInt(val) || 0;
+          count++;
+        }
+      }
+    }
+    if (count === 0) {
+      summaryDiv.innerHTML = '<span>No scores entered yet</span>';
+    } else {
+      const avg = (total / count).toFixed(1);
+      const predicted = (parseFloat(avg) * 8).toFixed(0);
+      summaryDiv.innerHTML = `<span>Filled cells: <strong>${count}/64</strong></span><span>Avg score per game: <strong>${avg}</strong></span><span>Predicted total: <strong>${predicted}/160</strong></span>`;
+    }
+  }
+  updateMatrixSummary();
 
   // Score handlers
   tbody.querySelectorAll('.matrix-input').forEach(input => {
@@ -889,6 +946,7 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
         }
       }
       updateCellColor(e.target.closest('td'), val);
+      updateMatrixSummary();
       if (ctx === 'prep') debouncedSaveState();
     });
   });
@@ -917,7 +975,68 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
     });
   });
 
-  // Cell click
+  // Vol direction handlers
+  tbody.querySelectorAll('.vol-dir-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const k = btn.dataset.key;
+      const ctx = btn.dataset.ctx;
+      let current;
+      if (ctx === 'prep' && currentPrepCountry) {
+        const m = appState.opponents[currentPrepCountry].matchups[k];
+        current = m ? (m.volDir || 'both') : 'both';
+      } else {
+        current = roundMatchupVolDir[k] || 'both';
+      }
+      const next = current === 'both' ? 'up' : current === 'up' ? 'down' : 'both';
+      const symbol = next === 'up' ? '↑' : next === 'down' ? '↓' : '±';
+      btn.textContent = symbol;
+      // Update placeholder of adjacent vol input
+      const volInput = btn.closest('.vol-wrapper').querySelector('.matrix-vol');
+      if (volInput) volInput.placeholder = symbol + ' vol';
+      if (ctx === 'prep' && currentPrepCountry) {
+        if (!appState.opponents[currentPrepCountry].matchups[k]) appState.opponents[currentPrepCountry].matchups[k] = {};
+        appState.opponents[currentPrepCountry].matchups[k].volDir = next;
+        debouncedSaveState();
+      } else {
+        roundMatchupVolDir[k] = next;
+      }
+    });
+  });
+
+  // Double-click to toggle preferred star
+  tbody.querySelectorAll('td[data-key]').forEach(td => {
+    td.addEventListener('dblclick', (e) => {
+      // Don't toggle if double-clicking on inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+      const k = td.dataset.key;
+      const ctx = td.dataset.ctx;
+      let isPref;
+      if (ctx === 'prep' && currentPrepCountry) {
+        if (!appState.opponents[currentPrepCountry].matchups[k]) appState.opponents[currentPrepCountry].matchups[k] = {};
+        isPref = !appState.opponents[currentPrepCountry].matchups[k].preferred;
+        appState.opponents[currentPrepCountry].matchups[k].preferred = isPref;
+        debouncedSaveState();
+      } else {
+        isPref = !roundMatchupPreferred[k];
+        if (isPref) roundMatchupPreferred[k] = true;
+        else delete roundMatchupPreferred[k];
+      }
+      // Toggle star in DOM
+      let star = td.querySelector('.pref-star');
+      if (isPref && !star) {
+        star = document.createElement('span');
+        star.className = 'pref-star';
+        star.title = 'Preferred matchup';
+        star.innerHTML = '&#11088;';
+        td.appendChild(star);
+      } else if (!isPref && star) {
+        star.remove();
+      }
+    });
+  });
+
+  // Cell click (single click for table prefs selection)
   tbody.querySelectorAll('td[data-key]').forEach(td => {
     td.addEventListener('click', () => {
       const k = td.dataset.key;
@@ -1124,6 +1243,8 @@ function renderMatches(state) {
     const est = roundMatchupScores[key];
     const vol = roundMatchupVolatility[key];
     const estCls = getMatrixCellClass(est);
+    const matchVolDir = roundMatchupVolDir[key] || 'both';
+    const matchVolSym = matchVolDir === 'up' ? '↑' : matchVolDir === 'down' ? '↓' : '±';
 
     // Table preference for this matchup
     let tablePrefHTML = '';
@@ -1141,7 +1262,7 @@ function renderMatches(state) {
       <div class="match-player team-a-bg"><strong>${playerHTML(match.playerA, pA.faction)}</strong></div>
       <div class="match-info">
         <div class="match-number">#${idx + 1}</div>
-        ${est !== undefined ? `<div class="match-estimate ${estCls}">${est}${vol ? `<small class="match-vol">±${vol}</small>` : ''}</div>` : ''}
+        ${est !== undefined ? `<div class="match-estimate ${estCls}">${est}${vol ? `<small class="match-vol">${matchVolSym}${vol}</small>` : ''}</div>` : ''}
         ${tableInfo ? `
           <div class="match-table">Table ${match.table + 1} ${tablePrefHTML}</div>
           <div class="match-map">${mapNameHTML(tableInfo.mapId, tableInfo.map)}</div>
@@ -1246,7 +1367,10 @@ function renderDualSelect(panel, prompt) {
       if (step === 'choose_defenders' || step === 'r3_choose_defenders') {
         input = { defenderA: selectedA, defenderB: selectedB };
       } else if (step === 'refuse_attackers' || step === 'r3_refuse_attackers') {
-        input = { refuseA: selectedA, refuseB: selectedB };
+        // User selected who to PLAY AGAINST; invert to get the refusal
+        const refuseA = prompt.optionsA.find(id => id !== selectedA);
+        const refuseB = prompt.optionsB.find(id => id !== selectedB);
+        input = { refuseA: refuseA, refuseB: refuseB };
       }
       const result = engine.processInput(input);
       if (result.success) renderPairingState();
@@ -1368,7 +1492,9 @@ function renderTableSelect(panel, prompt, state) {
     const matchPrefs = roundMatchupTablePrefs[tpKey] || {};
     const estScore = roundMatchupScores[tpKey];
     const vol = roundMatchupVolatility[tpKey];
-    const estHTML = estScore !== undefined ? `<span class="match-estimate-inline ${getMatrixCellClass(estScore)}">${estScore}${vol ? `<small class="match-vol">±${vol}</small>` : ''}</span>` : '';
+    const vDir = roundMatchupVolDir[tpKey] || 'both';
+    const vSym = vDir === 'up' ? '↑' : vDir === 'down' ? '↓' : '±';
+    const estHTML = estScore !== undefined ? `<span class="match-estimate-inline ${getMatrixCellClass(estScore)}">${estScore}${vol ? `<small class="match-vol">${vSym}${vol}</small>` : ''}</span>` : '';
 
     panel.innerHTML = `
       <div class="table-select-section">
@@ -1496,8 +1622,11 @@ function updateMatrixReference() {
       if (isMatch) extra = ' ref-cell-matched';
       else if (isDimmed) extra = ' ref-cell-dimmed';
 
-      const volHTML = vol ? `<small class="ref-vol">±${vol}</small>` : '';
-      html += `<td class="${cls}${extra}" data-ref-key="${key}">${val !== undefined ? val : '—'}${volHTML}</td>`;
+      const refVolDir = roundMatchupVolDir[key] || 'both';
+      const refVolSym = refVolDir === 'up' ? '↑' : refVolDir === 'down' ? '↓' : '±';
+      const volHTML = vol ? `<small class="ref-vol">${refVolSym}${vol}</small>` : '';
+      const refPref = roundMatchupPreferred[key] ? '<span class="pref-star" style="position:static;font-size:0.4rem">&#11088;</span>' : '';
+      html += `<td class="${cls}${extra}" data-ref-key="${key}">${refPref}${val !== undefined ? val : '—'}${volHTML}</td>`;
     });
     html += '</tr>';
   });
@@ -1667,7 +1796,13 @@ function renderCoachingTab() {
     const tpIcon = tablePref === 'good' ? '<span class="coaching-tp coaching-tp-good" title="Good table">▲</span>'
                  : tablePref === 'bad' ? '<span class="coaching-tp coaching-tp-bad" title="Bad table">▼</span>'
                  : '';
-    const volHTML = vol ? `<span class="coaching-vol-badge">±${vol}</span>` : '<span class="coaching-vol-none">—</span>';
+    let coachVolDir = 'both';
+    if (roundMatchupVolDir[key]) coachVolDir = roundMatchupVolDir[key];
+    else if (rd.opponent && appState.opponents[rd.opponent] && appState.opponents[rd.opponent].matchups[prepKey]) {
+      coachVolDir = appState.opponents[rd.opponent].matchups[prepKey].volDir || 'both';
+    }
+    const coachVolSym = coachVolDir === 'up' ? '↑' : coachVolDir === 'down' ? '↓' : '±';
+    const volHTML = vol ? `<span class="coaching-vol-badge">${coachVolSym}${vol}</span>` : '<span class="coaching-vol-none">—</span>';
 
     const directive = (saved._directives && saved._directives[idx]) || '';
     html += `

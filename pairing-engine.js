@@ -126,12 +126,12 @@ class PairingEngine {
       case 'refuse_attackers':
         return {
           type: 'dual_select',
-          titleA: `Team A: Refuse one of Team B's attackers (attacking ${this.getPlayerName(this.defenderA)})`,
-          titleB: `Team B: Refuse one of Team A's attackers (attacking ${this.getPlayerName(this.defenderB)})`,
+          titleA: `Team A: Choose opponent for your defender (${this.getPlayerName(this.defenderA)})`,
+          titleB: `Team B: Choose opponent for your defender (${this.getPlayerName(this.defenderB)})`,
           optionsA: this.attackersB,
           optionsB: this.attackersA,
           simultaneous: true,
-          description: `Each team secretly chooses which of the 2 attackers to refuse. Refused attackers return to the pool.`,
+          description: `Each team secretly chooses which attacker to play against. The other attacker is refused and returns to the pool.`,
         };
 
       case 'choose_tables_defenders':
@@ -170,12 +170,12 @@ class PairingEngine {
       case 'r3_refuse_attackers':
         return {
           type: 'dual_select',
-          titleA: `Team A: Refuse one of Team B's attackers (attacking ${this.getPlayerName(this.round3DefenderA)})`,
-          titleB: `Team B: Refuse one of Team A's attackers (attacking ${this.getPlayerName(this.round3DefenderB)})`,
+          titleA: `Team A: Choose opponent for your defender (${this.getPlayerName(this.round3DefenderA)})`,
+          titleB: `Team B: Choose opponent for your defender (${this.getPlayerName(this.round3DefenderB)})`,
           optionsA: this.round3AttackersB,
           optionsB: this.round3AttackersA,
           simultaneous: true,
-          description: `Refuse one attacker each. Refused attackers face each other (7th match). Accepted attackers play defenders (5th & 6th matches).`,
+          description: `Choose which attacker to play against. The other attacker is refused. Refused attackers face each other (7th match). Accepted attackers play defenders (5th & 6th matches).`,
         };
 
       case 'r3_choose_tables':
