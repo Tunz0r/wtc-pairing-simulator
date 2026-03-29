@@ -835,12 +835,18 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
   // For 'prep' context, scores = { '0_0': { score, volatility } }
   // For 'round' context, scores = { 'a0_b0': score }, separate volatility obj
 
+  // Determine hoverable IDs based on context
+  const myIdPrefix = 'myteam_';
+  const oppIdPrefix = context === 'prep' && currentPrepCountry ? `opp_${currentPrepCountry}_` : 'b';
+
   let headerHTML = '<tr><th class="matrix-corner"></th>';
   for (let j = 0; j < 8; j++) {
     const f = oppPlayers[j]?.faction || '?';
     const flags = oppPlayers[j]?.flags || [];
     const flagIcons = flags.map(fl => fl === 'unknown' ? '❓' : fl === 'danger' ? '⚠️' : fl === 'wildcard' ? '🃏' : '').join('');
-    headerHTML += `<th class="col-header team-b-color" title="${escHTML(f)}">${escHTML(f)}${flagIcons ? `<span class="matrix-flags">${flagIcons}</span>` : ''}</th>`;
+    const oppId = context === 'prep' ? `opp_${currentPrepCountry}_${j}` : `b${j}`;
+    const nameSpan = playerHTML(oppId, f);
+    headerHTML += `<th class="col-header team-b-color" title="${escHTML(f)}">${nameSpan}${flagIcons ? `<span class="matrix-flags">${flagIcons}</span>` : ''}</th>`;
   }
   headerHTML += '</tr>';
   thead.innerHTML = headerHTML;
@@ -848,7 +854,9 @@ function buildMatrixDOM(theadId, tbodyId, tpPanelId, myPlayers, oppPlayers, scor
   let bodyHTML = '';
   for (let i = 0; i < 8; i++) {
     const f = myPlayers[i]?.faction || '?';
-    bodyHTML += `<tr><th class="row-header team-a-color" title="${escHTML(f)}">${escHTML(f)}</th>`;
+    const myId = `myteam_${i}`;
+    const nameSpan = playerHTML(myId, f);
+    bodyHTML += `<tr><th class="row-header team-a-color" title="${escHTML(f)}">${nameSpan}</th>`;
     for (let j = 0; j < 8; j++) {
       let key, score, vol, volDir, preferred;
       if (context === 'prep') {
@@ -2504,7 +2512,30 @@ function initMapTooltip() {
 }
 
 function getPlayerData(id) {
-  return teamAData.find(p => p.id === id) || teamBData.find(p => p.id === id);
+  // First try the pairing round data (if a round is active)
+  const fromRound = teamAData.find(p => p.id === id) || teamBData.find(p => p.id === id);
+  if (fromRound) return fromRound;
+
+  // Fallback: look up directly from appState for matrix/coaching/prep contexts
+  // id format: 'a0'-'a7' for my team, 'b0'-'b7' for opponent
+  if (!id) return null;
+  if (id.startsWith('myteam_')) {
+    const idx = parseInt(id.replace('myteam_', ''));
+    const p = appState.myTeam.players[idx];
+    if (p) return { id, faction: p.faction, armyList: p.armyList };
+  }
+  if (id.startsWith('opp_')) {
+    // Format: opp_CountryName_idx
+    const parts = id.split('_');
+    const idx = parseInt(parts.pop());
+    const country = parts.slice(1).join('_');
+    const opp = appState.opponents[country];
+    if (opp && opp.players[idx]) {
+      const p = opp.players[idx];
+      return { id, faction: p.faction, armyList: p.armyList };
+    }
+  }
+  return null;
 }
 
 function positionTooltip(e, tooltip, tw, th) {
@@ -2525,6 +2556,8 @@ function playerHTML(playerId, faction) {
   const player = getPlayerData(playerId);
   const hasList = player && player.armyList;
   if (hasList) return `<span class="player-hoverable" data-player-id="${playerId}">${escHTML(faction)}</span>`;
+  // Even without army list, make hoverable with the playerId so tooltip can check dynamically
+  if (playerId) return `<span class="player-hoverable" data-player-id="${playerId}">${escHTML(faction)}</span>`;
   return escHTML(faction);
 }
 
