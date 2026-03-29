@@ -356,6 +356,18 @@ header h1 {
   font-size: 0.85rem;
 }
 
+/* Faction duplicate warning */
+.faction-duplicate {
+  border-color: #ef5350 !important;
+  box-shadow: 0 0 0 2px rgba(239, 83, 80, 0.25);
+}
+.faction-dup-warn {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: help;
+}
+
 .player-faction {
   flex: 1;
   padding: 8px 10px;

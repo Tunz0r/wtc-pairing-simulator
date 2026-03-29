@@ -136,6 +136,66 @@ function debouncedSaveState() {
 }
 
 // ===========================
+// Faction Duplicate Validation
+// ===========================
+
+function getFactionSlot(faction) {
+  if (!faction) return '';
+  const trimmed = faction.trim();
+  if (!trimmed) return '';
+  // All Space Marine chapters count as one faction slot
+  if (SPACE_MARINE_CHAPTERS.includes(trimmed)) return '__SM__';
+  return trimmed.toLowerCase();
+}
+
+function validateFactionDuplicates(prefix, count) {
+  // prefix: 'my-faction-' or 'opp-faction-'
+  const slots = [];
+  const inputs = [];
+  for (let i = 0; i < count; i++) {
+    const el = document.getElementById(`${prefix}${i}`);
+    if (!el) continue;
+    const faction = el.value.trim();
+    const slot = getFactionSlot(faction);
+    slots.push(slot);
+    inputs.push(el);
+  }
+
+  // Find duplicates
+  const seen = {};
+  const dupIndices = new Set();
+  slots.forEach((slot, i) => {
+    if (!slot) return;
+    if (seen[slot] !== undefined) {
+      dupIndices.add(seen[slot]);
+      dupIndices.add(i);
+    } else {
+      seen[slot] = i;
+    }
+  });
+
+  // Apply/remove visual warnings
+  inputs.forEach((el, i) => {
+    const row = el.closest('.player-row');
+    const existingWarn = row?.querySelector('.faction-dup-warn');
+    if (dupIndices.has(i)) {
+      el.classList.add('faction-duplicate');
+      if (!existingWarn && row) {
+        const warn = document.createElement('span');
+        warn.className = 'faction-dup-warn';
+        const slot = slots[i];
+        warn.title = slot === '__SM__' ? 'Duplicate: all SM chapters count as one faction' : 'Duplicate faction';
+        warn.textContent = '⚠️';
+        row.appendChild(warn);
+      }
+    } else {
+      el.classList.remove('faction-duplicate');
+      if (existingWarn) existingWarn.remove();
+    }
+  });
+}
+
+// ===========================
 // TAB 1: My Team
 // ===========================
 
@@ -169,7 +229,10 @@ function buildMyTeamInputs() {
   ensureFactionDatalist();
 
   // Auto-save on change (fresh listeners, no stacking)
-  container.addEventListener('input', () => { collectMyTeam(); debouncedSaveState(); });
+  container.addEventListener('input', () => { collectMyTeam(); validateFactionDuplicates('my-faction-', 8); debouncedSaveState(); });
+
+  // Run initial validation
+  validateFactionDuplicates('my-faction-', 8);
 
   // These only need binding once, guard against stacking
   const nameInput = document.getElementById('my-team-name');
@@ -569,7 +632,10 @@ function buildOppTeamInputs() {
     debouncedSaveState();
   });
 
-  container.addEventListener('input', () => { collectPrepData(); debouncedSaveState(); });
+  container.addEventListener('input', () => { collectPrepData(); validateFactionDuplicates('opp-faction-', 8); debouncedSaveState(); });
+
+  // Run initial validation
+  validateFactionDuplicates('opp-faction-', 8);
 }
 
 function collectPrepData() {
